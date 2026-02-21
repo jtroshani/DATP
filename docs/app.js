@@ -16,6 +16,8 @@ const solutionMetaEl = document.getElementById("solutionMeta");
 const versionListEl = document.getElementById("versionList");
 const timelineVisualEl = document.getElementById("timelineVisual");
 const matrixBodyEl = document.getElementById("matrixBody");
+const exportPreviewMetaEl = document.getElementById("exportPreviewMeta");
+const exportPreviewEl = document.getElementById("exportPreview");
 const aiModeEl = document.getElementById("aiMode");
 const aiModelEl = document.getElementById("aiModel");
 const aiEndpointEl = document.getElementById("aiEndpoint");
@@ -62,6 +64,7 @@ function init() {
   syncAIControls(true);
   attachEventHandlers();
   setActiveTab("intake");
+  renderExportPreview(null);
   renderVersionHistory();
 }
 
@@ -123,37 +126,15 @@ function attachEventHandlers() {
     generationStatusEl.textContent = "Full solution pack copied to clipboard.";
   });
 
-  document.getElementById("copySummary").addEventListener("click", async () => {
-    if (!ensurePackExists()) return;
-    await copyText(sectionEls.sectionA.textContent || "");
-    generationStatusEl.textContent = "Executive summary copied.";
-  });
-
-  document.getElementById("copyGovernance").addEventListener("click", async () => {
-    if (!ensurePackExists()) return;
-    await copyText(sectionEls.sectionB.textContent || "");
-    generationStatusEl.textContent = "Governance model copied.";
-  });
-
-  document.getElementById("copyNextSteps").addEventListener("click", async () => {
-    if (!ensurePackExists()) return;
-    await copyText(sectionEls.sectionG.textContent || "");
-    generationStatusEl.textContent = "Next steps copied.";
-  });
-
-  document.getElementById("copyAIInsights").addEventListener("click", async () => {
-    if (!ensurePackExists()) return;
-    await copyText(sectionEls.sectionH.textContent || "");
-    generationStatusEl.textContent = "AI insights copied.";
-  });
-
   document.getElementById("printPdf").addEventListener("click", () => {
     if (!state.currentPack) {
       generationStatusEl.textContent = "Generate a solution pack before exporting.";
       return;
     }
-    setActiveTab("solution");
-    window.print();
+    setActiveTab("export");
+    window.requestAnimationFrame(() => {
+      window.print();
+    });
   });
 
   document.getElementById("clearHistory").addEventListener("click", () => {
@@ -1461,6 +1442,117 @@ function renderSolutionPack(pack) {
   if (sectionEls.sectionH) {
     sectionEls.sectionH.textContent = getAISectionText(pack);
   }
+  renderExportPreview(pack);
+}
+
+function renderExportPreview(pack) {
+  if (!exportPreviewEl || !exportPreviewMetaEl) return;
+
+  if (!pack) {
+    exportPreviewMetaEl.textContent = "";
+    exportPreviewEl.innerHTML = '<div class="export-empty">Generate a solution pack from Intake to preview the full plan here.</div>';
+    return;
+  }
+
+  exportPreviewMetaEl.textContent = `${pack.title} | ${pack.complexity} complexity | Generated ${formatDateTime(pack.createdAt)}`;
+  exportPreviewEl.innerHTML = "";
+
+  const timeline = getTimelineData(pack);
+  const matrix = getMatrixData(pack, timeline);
+  const aiSection = getAISectionText(pack);
+
+  const addSection = (heading, bodyText) => {
+    const block = document.createElement("section");
+    block.className = "export-block";
+
+    const h = document.createElement("h3");
+    h.className = "export-heading";
+    h.textContent = heading;
+
+    const body = document.createElement("pre");
+    body.className = "export-body";
+    body.textContent = bodyText || "No content.";
+
+    block.appendChild(h);
+    block.appendChild(body);
+    exportPreviewEl.appendChild(block);
+  };
+
+  const timelineBlock = document.createElement("section");
+  timelineBlock.className = "export-block";
+  const timelineHeading = document.createElement("h3");
+  timelineHeading.className = "export-heading";
+  timelineHeading.textContent = "Delivery timeline";
+  timelineBlock.appendChild(timelineHeading);
+  const timelineList = document.createElement("ol");
+  timelineList.className = "export-timeline";
+  timeline.forEach((item, index) => {
+    const li = document.createElement("li");
+    li.textContent = `Phase ${item.phaseNumber || index + 1} [${item.stage || "Execution"}]: ${item.milestone || "Milestone"} | ${item.window || "Window TBD"} | Target ${item.targetDate || "TBD"}`;
+    timelineList.appendChild(li);
+  });
+  if (!timeline.length) {
+    const li = document.createElement("li");
+    li.textContent = "No milestones available.";
+    timelineList.appendChild(li);
+  }
+  timelineBlock.appendChild(timelineList);
+  exportPreviewEl.appendChild(timelineBlock);
+
+  const matrixBlock = document.createElement("section");
+  matrixBlock.className = "export-block";
+  const matrixHeading = document.createElement("h3");
+  matrixHeading.className = "export-heading";
+  matrixHeading.textContent = "Execution tracker matrix";
+  matrixBlock.appendChild(matrixHeading);
+
+  const matrixWrap = document.createElement("div");
+  matrixWrap.className = "export-matrix-wrap";
+  const table = document.createElement("table");
+  table.className = "export-table";
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th scope="col">Work item</th>
+        <th scope="col">Owner</th>
+        <th scope="col">Status</th>
+        <th scope="col">Due date</th>
+        <th scope="col">Dependencies</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  `;
+  const tbody = table.querySelector("tbody");
+  matrix.forEach((row) => {
+    const tr = document.createElement("tr");
+    const cells = [row.workItem, row.owner, row.status, row.dueDate, row.dependencies];
+    cells.forEach((cellText) => {
+      const td = document.createElement("td");
+      td.textContent = cellText || "";
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  if (!matrix.length && tbody) {
+    const tr = document.createElement("tr");
+    const td = document.createElement("td");
+    td.colSpan = 5;
+    td.textContent = "No work items available.";
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+  }
+  matrixWrap.appendChild(table);
+  matrixBlock.appendChild(matrixWrap);
+  exportPreviewEl.appendChild(matrixBlock);
+
+  addSection("A) Executive summary", getPackSection(pack, "sectionA"));
+  addSection("B) Governance + decision model", getPackSection(pack, "sectionB"));
+  addSection("C) Process model + mapping", getPackSection(pack, "sectionC"));
+  addSection("D) Planning deliverables", getPackSection(pack, "sectionD"));
+  addSection("E) Execution + accountability", getPackSection(pack, "sectionE"));
+  addSection("F) Expert collaboration recommendations", getPackSection(pack, "sectionF"));
+  addSection("G) Next steps", getPackSection(pack, "sectionG"));
+  addSection("H) AI insights and recommendations", aiSection);
 }
 
 function renderFullPackText(pack) {

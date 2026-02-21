@@ -309,17 +309,17 @@
         </section>
 
         <section class="tab-panel" id="tab-export" role="tabpanel" tabindex="0" aria-labelledby="tabbtn-export">
-          <h2>Export and Copy</h2>
-          <div class="export-grid">
-            <button type="button" class="primary-btn" id="copySummary">Copy Executive Summary</button>
-            <button type="button" class="primary-btn" id="copyGovernance">Copy Governance Model</button>
-            <button type="button" class="primary-btn" id="copyNextSteps">Copy Next Steps</button>
-            <button type="button" class="primary-btn" id="copyAIInsights">Copy AI Insights</button>
-            <button type="button" class="secondary-btn" id="printPdf">Export to PDF</button>
+          <div class="export-toolbar">
+            <div>
+              <h2>Export and Preview</h2>
+              <p class="helper-text">Review the complete plan below, then export it as a polished PDF.</p>
+            </div>
+            <button type="button" class="primary-btn export-btn" id="printPdf">Export to PDF</button>
           </div>
-          <p class="helper-text">
-            PDF export uses your browser print dialog with minimal print styling.
-          </p>
+          <div id="exportPreviewMeta" class="export-meta"></div>
+          <article id="exportPreview" class="export-preview" aria-live="polite">
+            <div class="export-empty">Generate a solution pack from Intake to preview the full plan here.</div>
+          </article>
         </section>
 
         <section class="tab-panel" id="tab-history" role="tabpanel" tabindex="0" aria-labelledby="tabbtn-history">

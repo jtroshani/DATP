@@ -553,6 +553,103 @@ button {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
+.export-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.8rem;
+  margin-bottom: 0.75rem;
+}
+
+.export-btn {
+  min-height: 44px;
+  min-width: 170px;
+}
+
+.export-meta {
+  margin-bottom: 0.7rem;
+  color: var(--neutral-700);
+}
+
+.export-preview {
+  border: 1px solid var(--neutral-200);
+  border-radius: 12px;
+  background: #fbfdff;
+  padding: 0.8rem;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.export-empty {
+  color: var(--neutral-700);
+  padding: 0.2rem 0.1rem;
+}
+
+.export-block {
+  border: 1px solid #d7e4f1;
+  border-radius: 10px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.export-heading {
+  margin: 0;
+  padding: 0.65rem 0.8rem;
+  border-bottom: 1px solid #dbe6f2;
+  background: #f6faff;
+  color: #1b3f67;
+  font-size: 0.96rem;
+}
+
+.export-body {
+  margin: 0;
+  padding: 0.72rem 0.8rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: "IBM Plex Sans", "Avenir Next", "Helvetica Neue", sans-serif;
+  color: #1e2e41;
+  line-height: 1.48;
+}
+
+.export-timeline {
+  margin: 0;
+  padding: 0.75rem 1.3rem 0.85rem;
+  display: grid;
+  gap: 0.38rem;
+}
+
+.export-timeline li {
+  line-height: 1.45;
+  color: #1e2e41;
+}
+
+.export-matrix-wrap {
+  overflow-x: auto;
+}
+
+.export-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 760px;
+}
+
+.export-table th,
+.export-table td {
+  border-bottom: 1px solid #d9e4f0;
+  text-align: left;
+  padding: 0.52rem 0.58rem;
+  vertical-align: top;
+  color: #20354d;
+  font-size: 0.9rem;
+}
+
+.export-table th {
+  background: #f4f9ff;
+  color: #22466e;
+  font-size: 0.84rem;
+}
+
 .helper-text {
   color: var(--neutral-700);
 }
@@ -728,6 +825,37 @@ button {
     font-size: 0.8rem;
     letter-spacing: 0;
   }
+
+  .export-toolbar {
+    align-items: stretch;
+  }
+
+  .export-btn {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .export-preview {
+    padding: 0.65rem;
+    gap: 0.58rem;
+  }
+
+  .export-body {
+    padding: 0.68rem 0.72rem;
+    font-size: 0.92rem;
+  }
+
+  .export-table {
+    min-width: 0;
+    table-layout: fixed;
+  }
+
+  .export-table th,
+  .export-table td {
+    font-size: 0.8rem;
+    padding: 0.45rem 0.4rem;
+    overflow-wrap: anywhere;
+  }
 }
 
 @media (max-width: 640px) {
@@ -804,13 +932,21 @@ button {
 }
 
 @media print {
+  @page {
+    size: auto;
+    margin: 0.55in;
+  }
+
   body {
     background: #fff;
+    color: #111;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
   .tab-nav,
   #tab-intake,
-  #tab-export,
+  #tab-solution,
   #tab-history,
   .help-panel,
   .copy-btn,
@@ -825,29 +961,80 @@ button {
     padding: 0;
   }
 
-  #tab-solution {
+  #tab-export {
     display: block !important;
     box-shadow: none;
     border: none;
     padding: 0;
+    background: #fff;
   }
 
-  .section-card {
-    border: 1px solid #ddd;
+  .export-toolbar {
+    margin-bottom: 0.25rem;
+  }
+
+  .export-btn {
+    display: none !important;
+  }
+
+  .export-meta {
+    margin-bottom: 0.45rem;
+  }
+
+  .export-preview {
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    gap: 0.35rem;
+  }
+
+  .export-block {
+    border: 1px solid #d8d8d8;
     page-break-inside: avoid;
+    break-inside: avoid;
   }
 
-  .timeline-rail {
-    overflow: visible;
-    display: grid;
-    grid-template-columns: 1fr;
+  .export-heading {
+    background: #f3f3f3;
+    color: #1a1a1a;
+    font-size: 11pt;
   }
 
-  .timeline-node::after {
-    display: none;
+  .export-body {
+    font-size: 10.5pt;
+    line-height: 1.35;
+    padding: 0.5rem 0.62rem;
   }
 
-  .tracker-table {
+  .export-timeline {
+    gap: 0.15rem;
+    padding: 0.5rem 1.1rem 0.58rem;
+    font-size: 10pt;
+  }
+
+  .export-timeline li {
+    break-inside: avoid;
+  }
+
+  .export-matrix-wrap {
     min-width: 0;
+    overflow: visible;
+  }
+
+  .export-table {
+    min-width: 0;
+    table-layout: fixed;
+  }
+
+  .export-table th,
+  .export-table td {
+    font-size: 9pt;
+    padding: 0.24rem 0.28rem;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+  }
+
+  .export-table tr {
+    break-inside: avoid;
   }
 }
