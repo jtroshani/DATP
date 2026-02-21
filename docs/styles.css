@@ -267,6 +267,55 @@ label {
   font-size: 0.84rem;
 }
 
+.app-shell .privacy-notice {
+  isolation: isolate;
+}
+
+.app-shell .privacy-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.62rem;
+}
+
+.app-shell .privacy-head > div {
+  min-width: 0;
+}
+
+.app-shell .info-icon {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.15rem;
+  min-height: 1.15rem;
+  line-height: 1;
+  font-family: inherit;
+  font-style: normal;
+  text-transform: none;
+  vertical-align: middle;
+}
+
+.app-shell .privacy-learn-more > summary {
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.34rem;
+  width: auto;
+}
+
+.app-shell .privacy-learn-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.app-shell .privacy-learn-more > summary::before {
+  content: "\25B8";
+  font-size: 0.8rem;
+  line-height: 1;
+  color: #0f4a7b;
+}
+
+.app-shell .privacy-learn-more[open] > summary::before {
+  content: "\25BE";
+}
+
 .is-hidden {
   display: none !important;
 }
