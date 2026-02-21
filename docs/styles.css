@@ -77,22 +77,50 @@ h3 {
   background: var(--white);
   border: 1px solid var(--neutral-200);
   border-radius: var(--radius);
-  padding: 0.7rem 0.9rem;
-  display: flex;
-  gap: 1rem;
-  align-items: center;
+  padding: 0.75rem 0.95rem;
+  display: grid;
+  gap: 0.55rem;
+  min-width: min(100%, 420px);
   box-shadow: var(--shadow);
 }
 
 .toggle-label {
   font-weight: 600;
   color: var(--neutral-700);
+  text-align: center;
 }
 
-.complexity-toggle label {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
+.complexity-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.8rem;
+  align-items: start;
+  justify-items: center;
+}
+
+.complexity-option {
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 0.3rem;
+  margin: 0;
+  min-width: 0;
+  color: var(--neutral-700);
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+}
+
+.complexity-option input[type="radio"] {
+  width: 1.2rem;
+  height: 1.2rem;
+  margin: 0;
+}
+
+.complexity-option span {
+  font-size: 0.92rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
 .tab-nav {
@@ -593,13 +621,7 @@ button {
 
   .complexity-toggle {
     width: 100%;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    row-gap: 0.55rem;
-  }
-
-  .complexity-toggle .toggle-label {
-    width: 100%;
+    min-width: 0;
   }
 
   .timeline-rail {
@@ -683,6 +705,14 @@ button {
   .actions-row .secondary-btn {
     min-height: 48px;
   }
+
+  .complexity-options {
+    gap: 0.55rem;
+  }
+
+  .complexity-option span {
+    font-size: 0.9rem;
+  }
 }
 
 @media (max-width: 640px) {
@@ -718,27 +748,7 @@ button {
   }
 
   .complexity-toggle {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    column-gap: 0.25rem;
-    row-gap: 0.5rem;
-    padding: 0.7rem 0.65rem;
-  }
-
-  .complexity-toggle .toggle-label {
-    grid-column: 1 / -1;
-    width: auto;
-  }
-
-  .complexity-toggle label {
-    justify-self: center;
-    font-size: 0.95rem;
-    white-space: nowrap;
-    gap: 0.28rem;
-  }
-
-  .complexity-toggle input[type="radio"] {
-    transform: scale(0.95);
+    padding: 0.7rem 0.7rem;
   }
 
   .tab-panel {
@@ -751,17 +761,9 @@ button {
     font-size: 1.7rem;
   }
 
-  .complexity-toggle {
+  .complexity-options {
     grid-template-columns: 1fr;
-    row-gap: 0.4rem;
-  }
-
-  .complexity-toggle .toggle-label {
-    margin-bottom: 0.1rem;
-  }
-
-  .complexity-toggle label {
-    justify-self: stretch;
+    gap: 0.45rem;
   }
 }
 
