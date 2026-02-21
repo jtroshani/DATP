@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Project Management Solutions Builder</title>
-    <link rel="stylesheet" href="styles.css?v=20260221b" />
+    <link rel="stylesheet" href="styles.css?v=20260221j" />
   </head>
   <body>
     <div class="app-shell">
@@ -42,7 +42,6 @@
       <nav class="tab-nav" role="tablist" aria-label="Dashboard sections">
         <button class="tab-btn active" id="tabbtn-intake" data-tab="intake" role="tab" aria-selected="true" aria-controls="tab-intake" type="button">Intake</button>
         <button class="tab-btn" id="tabbtn-solution" data-tab="solution" role="tab" aria-selected="false" aria-controls="tab-solution" type="button">Solution Pack</button>
-        <button class="tab-btn" id="tabbtn-export" data-tab="export" role="tab" aria-selected="false" aria-controls="tab-export" type="button">Export/Copy</button>
         <button class="tab-btn" id="tabbtn-history" data-tab="history" role="tab" aria-selected="false" aria-controls="tab-history" type="button">Version History</button>
       </nav>
 
@@ -202,6 +201,7 @@
             <p id="retentionStatus" class="retention-status" aria-live="polite"></p>
 
             <div class="actions-row">
+              <button class="secondary-btn" type="button" id="loadSampleData">Load Sample Data</button>
               <button class="primary-btn" type="submit">Generate Solution Pack</button>
               <p id="generationStatus" aria-live="polite"></p>
             </div>
@@ -222,34 +222,45 @@
         </section>
 
         <section class="tab-panel" id="tab-solution" role="tabpanel" tabindex="0" aria-labelledby="tabbtn-solution">
+          <header class="solution-pdf-header" id="solutionPdfHeader" aria-live="polite">
+            <h1 id="solutionPdfProjectName">Project Name</h1>
+            <p id="solutionPdfProjectSummary">Generate a solution pack to prepare a distribution-ready PDF summary.</p>
+          </header>
+
           <div class="solution-header">
             <h2>Project Management Solution Pack</h2>
-            <button type="button" class="secondary-btn" id="copyFullPack">Copy Full Pack</button>
+            <div class="solution-actions">
+              <button type="button" class="secondary-btn" id="copyFullPack">Copy Full Pack</button>
+              <button type="button" class="primary-btn" id="exportSolutionPdf">Export to PDF</button>
+            </div>
           </div>
           <div id="solutionMeta" class="solution-meta"></div>
 
-          <div class="section-card">
+          <div class="section-card accent-summary">
+            <div class="card-header">
+              <h3>A) Executive summary</h3>
+              <button type="button" class="copy-btn" data-copy="sectionA">Copy</button>
+            </div>
+            <pre id="sectionA" class="section-content">Generate a solution pack from Intake to view this section.</pre>
+          </div>
+
+          <div class="section-card accent-timeline" id="card-timeline">
             <div class="card-header">
               <h3>Delivery timeline</h3>
               <button type="button" class="copy-btn" id="copyTimeline">Copy</button>
             </div>
-            <p class="visual-helper">
-              Key phases, milestones, and target dates.
-            </p>
-            <div id="timelineMetrics" class="phase-metrics" aria-label="Phase progress indicators"></div>
+            <p class="visual-helper">Key phases, milestones, and target dates.</p>
             <ol id="timelineVisual" class="timeline-rail" aria-label="Project timeline">
               <li class="timeline-node timeline-empty">Generate a solution pack from Intake to view the timeline.</li>
             </ol>
           </div>
 
-          <div class="section-card">
+          <div class="section-card accent-governance" id="card-matrix">
             <div class="card-header">
               <h3>Execution tracker matrix</h3>
               <button type="button" class="copy-btn" id="copyMatrix">Copy</button>
             </div>
-            <p class="visual-helper">
-              Track work items, owners, status, due dates, and dependencies.
-            </p>
+            <p class="visual-helper">Track work items, owners, status, due dates, and dependencies.</p>
             <div class="matrix-wrap">
               <table class="tracker-table" aria-label="Execution tracker matrix">
                 <thead>
@@ -270,15 +281,28 @@
             </div>
           </div>
 
-          <div class="section-card">
+          <div class="section-card accent-risks">
             <div class="card-header">
-              <h3>A) Executive summary</h3>
-              <button type="button" class="copy-btn" data-copy="sectionA">Copy</button>
+              <h3>Outcome charts</h3>
             </div>
-            <pre id="sectionA" class="section-content">Generate a solution pack from Intake to view this section.</pre>
+            <div class="chart-grid">
+              <div class="chart-card">
+                <h4>Phase duration (days)</h4>
+                <div id="phaseDurationChart" class="chart-block" aria-label="Bar chart of timeline duration by phase">
+                  <p class="chart-empty">Generate a solution pack to view phase durations.</p>
+                </div>
+              </div>
+              <div class="chart-card">
+                <h4>Effort allocation</h4>
+                <div class="donut-layout">
+                  <div id="effortDonut" class="effort-donut" aria-label="Donut chart of effort allocation"><span>0 owners</span></div>
+                  <ul id="effortLegend" class="chart-legend"></ul>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div class="section-card">
+          <div class="section-card accent-governance">
             <div class="card-header">
               <h3>B) Governance + decision model</h3>
               <button type="button" class="copy-btn" data-copy="sectionB">Copy</button>
@@ -286,7 +310,7 @@
             <pre id="sectionB" class="section-content">Generate a solution pack from Intake to view this section.</pre>
           </div>
 
-          <div class="section-card">
+          <div class="section-card accent-governance">
             <div class="card-header">
               <h3>C) Process model + mapping</h3>
               <button type="button" class="copy-btn" data-copy="sectionC">Copy</button>
@@ -294,7 +318,7 @@
             <pre id="sectionC" class="section-content">Generate a solution pack from Intake to view this section.</pre>
           </div>
 
-          <div class="section-card">
+          <div class="section-card accent-deliverables">
             <div class="card-header">
               <h3>D) Planning deliverables</h3>
               <button type="button" class="copy-btn" data-copy="sectionD">Copy</button>
@@ -302,7 +326,27 @@
             <pre id="sectionD" class="section-content">Generate a solution pack from Intake to view this section.</pre>
           </div>
 
-          <div class="section-card">
+          <div class="section-card accent-deliverables">
+            <div class="card-header">
+              <h3>Workstreams</h3>
+              <button type="button" class="copy-btn" id="copyWorkstreams">Copy</button>
+            </div>
+            <ul id="workstreamsList" class="workstreams-list">
+              <li>Generate a solution pack from Intake to view workstreams.</li>
+            </ul>
+          </div>
+
+          <div class="section-card accent-risks">
+            <div class="card-header">
+              <h3>Risks and issues (RAID snapshot)</h3>
+              <button type="button" class="copy-btn" id="copyRaidSnapshot">Copy</button>
+            </div>
+            <ul id="raidSnapshotList" class="raid-list">
+              <li>Generate a solution pack from Intake to view the RAID snapshot.</li>
+            </ul>
+          </div>
+
+          <div class="section-card accent-risks">
             <div class="card-header">
               <h3>E) Execution + accountability</h3>
               <button type="button" class="copy-btn" data-copy="sectionE">Copy</button>
@@ -310,7 +354,7 @@
             <pre id="sectionE" class="section-content">Generate a solution pack from Intake to view this section.</pre>
           </div>
 
-          <div class="section-card">
+          <div class="section-card accent-deliverables">
             <div class="card-header">
               <h3>F) Expert collaboration recommendations</h3>
               <button type="button" class="copy-btn" data-copy="sectionF">Copy</button>
@@ -318,7 +362,7 @@
             <pre id="sectionF" class="section-content">Generate a solution pack from Intake to view this section.</pre>
           </div>
 
-          <div class="section-card">
+          <div class="section-card accent-next">
             <div class="card-header">
               <h3>G) Next steps</h3>
               <button type="button" class="copy-btn" data-copy="sectionG">Copy</button>
@@ -326,27 +370,13 @@
             <pre id="sectionG" class="section-content">Generate a solution pack from Intake to view this section.</pre>
           </div>
 
-          <div class="section-card">
+          <div class="section-card accent-summary">
             <div class="card-header">
               <h3>H) AI insights and recommendations</h3>
               <button type="button" class="copy-btn" data-copy="sectionH">Copy</button>
             </div>
             <pre id="sectionH" class="section-content">Generate a solution pack from Intake to view this section.</pre>
           </div>
-        </section>
-
-        <section class="tab-panel" id="tab-export" role="tabpanel" tabindex="0" aria-labelledby="tabbtn-export">
-          <div class="export-toolbar">
-            <div>
-              <h2>Export and Preview</h2>
-              <p class="helper-text">Review the complete plan below, then export it as a polished PDF.</p>
-            </div>
-            <button type="button" class="primary-btn export-btn" id="printPdf">Export to PDF</button>
-          </div>
-          <div id="exportPreviewMeta" class="export-meta"></div>
-          <article id="exportPreview" class="export-preview" aria-live="polite">
-            <div class="export-empty">Generate a solution pack from Intake to preview the full plan here.</div>
-          </article>
         </section>
 
         <section class="tab-panel" id="tab-history" role="tabpanel" tabindex="0" aria-labelledby="tabbtn-history">
@@ -373,6 +403,6 @@
       </aside>
     </div>
 
-    <script src="app.js?v=20260221b"></script>
+    <script src="app.js?v=20260221j"></script>
   </body>
 </html>

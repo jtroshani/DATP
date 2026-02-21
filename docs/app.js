@@ -1,5 +1,6 @@
 const STORAGE_KEY = "cunySolutionPackHistorySession";
 const RETENTION_EXPIRY_KEY = "cunySessionRetentionExpiry";
+const SAMPLE_ROTATION_KEY = "cunySampleRotationNextIndex";
 const RETENTION_MS = 15 * 60 * 1000;
 const RETENTION_WARNING_MS = 60 * 1000;
 
@@ -7,7 +8,6 @@ const tabs = document.querySelectorAll(".tab-btn");
 const panels = {
   intake: document.getElementById("tab-intake"),
   solution: document.getElementById("tab-solution"),
-  export: document.getElementById("tab-export"),
   history: document.getElementById("tab-history"),
 };
 
@@ -20,9 +20,33 @@ const versionListEl = document.getElementById("versionList");
 const timelineVisualEl = document.getElementById("timelineVisual");
 const timelineMetricsEl = document.getElementById("timelineMetrics");
 const matrixBodyEl = document.getElementById("matrixBody");
+const solutionSubTabs = document.querySelectorAll(".solution-tab-btn");
+const solutionPanels = document.querySelectorAll(".solution-panel");
+const quickJumpSelectEl = document.getElementById("quickJumpSelect");
+const quickTogglePanelsEl = document.getElementById("quickTogglePanels");
+const quickCopySelectEl = document.getElementById("quickCopySelect");
+const quickCopyBtnEl = document.getElementById("quickCopyBtn");
+const quickExportPdfBtnEl = document.getElementById("quickExportPdfBtn");
+const statusPriorityBadgeEl = document.getElementById("statusPriorityBadge");
+const statusComplexityBadgeEl = document.getElementById("statusComplexityBadge");
+const statusPhaseLabelEl = document.getElementById("statusPhaseLabel");
+const statusPercentLabelEl = document.getElementById("statusPercentLabel");
+const statusProgressFillEl = document.getElementById("statusProgressFill");
+const phaseStepperEl = document.getElementById("phaseStepper");
+const miniMetricsEl = document.getElementById("miniMetrics");
+const phaseDurationChartEl = document.getElementById("phaseDurationChart");
+const effortDonutEl = document.getElementById("effortDonut");
+const effortLegendEl = document.getElementById("effortLegend");
+const workstreamsListEl = document.getElementById("workstreamsList");
+const copyWorkstreamsEl = document.getElementById("copyWorkstreams");
+const raidSnapshotListEl = document.getElementById("raidSnapshotList");
+const copyRaidSnapshotEl = document.getElementById("copyRaidSnapshot");
 const retentionStatusEl = document.getElementById("retentionStatus");
 const exportPreviewMetaEl = document.getElementById("exportPreviewMeta");
 const exportPreviewEl = document.getElementById("exportPreview");
+const exportSolutionPdfEl = document.getElementById("exportSolutionPdf");
+const solutionPdfProjectNameEl = document.getElementById("solutionPdfProjectName");
+const solutionPdfProjectSummaryEl = document.getElementById("solutionPdfProjectSummary");
 const aiModeEl = document.getElementById("aiMode");
 const aiModelEl = document.getElementById("aiModel");
 const aiEndpointEl = document.getElementById("aiEndpoint");
@@ -66,6 +90,191 @@ const SIMPLE_AI_DEFAULTS = {
   cloudEndpoint: "https://openrouter.ai/api/v1/chat/completions",
 };
 
+const STATUS_PHASES = ["Initiation", "Planning", "Execution", "M&C", "Closure"];
+
+const SAMPLE_PROJECTS = [
+  {
+    projectTitle: "Student Success Early Alert Workflow Modernization",
+    projectGoal: "Reduce issue-to-intervention time for at-risk students from 10 days to 3 days.",
+    ownerName: "Alex Rivera",
+    ownerArea: "Academic Affairs",
+    problem: "Current early alert intake and triage steps are inconsistent across colleges. Advisors receive incomplete requests and follow-up actions are delayed. A standard process is needed to improve response speed and accountability.",
+    outcomes: [
+      "Standardize intake and triage steps across participating departments",
+      "Improve advisor response time and case routing accuracy",
+      "Launch weekly leadership reporting with clear ownership and due dates",
+    ],
+    constraints: {
+      budget: "Fixed at $120,000 for implementation and training",
+      staffing: "Project Manager, Business Analyst, Tech Lead, Advising SMEs, Reporting Analyst",
+      compliance: "FERPA, accessibility (WCAG 2.1 AA), and records-retention policy alignment",
+      tech: "Must use CUNYfirst + Microsoft 365; no new platforms this phase",
+    },
+    goLiveOffsetDays: 112,
+    urgency: "High",
+    stakeholders: [
+      "Academic Affairs leadership",
+      "Advising and student success teams",
+      "Registrar and enrollment services",
+      "IT applications and data/reporting teams",
+    ],
+    systems: [
+      "CUNYfirst student records",
+      "Microsoft Teams and SharePoint",
+      "Power BI reporting workspace",
+    ],
+    risks: [
+      "Delayed decisions on cross-campus workflow standards",
+      "Advisor capacity constraints during peak registration periods",
+      "Late data-quality issues in source systems",
+    ],
+  },
+  {
+    projectTitle: "Curriculum Change Approval Process Redesign",
+    projectGoal: "Cut curriculum change approval cycle time from one semester to six weeks.",
+    ownerName: "Maya Chen",
+    ownerArea: "Provost Office",
+    problem: "Curriculum proposals move through multiple committees with inconsistent handoffs and limited visibility. Departments cannot reliably predict approval timing, creating delays for catalog and advising updates.",
+    outcomes: [
+      "Establish a single intake and routing workflow for curriculum proposals",
+      "Define clear ownership and SLAs for each approval stage",
+      "Provide dashboard reporting for proposal status and bottlenecks",
+    ],
+    constraints: {
+      budget: "Limited to existing operating funds and internal tooling",
+      staffing: "Faculty governance coordinator, PM, process analyst, registrar SMEs",
+      compliance: "Academic policy adherence and governance committee requirements",
+      tech: "Use existing SharePoint and workflow tools; no custom app build",
+    },
+    goLiveOffsetDays: 98,
+    urgency: "Moderate",
+    stakeholders: [
+      "Provost Office",
+      "Faculty Senate committees",
+      "Department chairs and program directors",
+      "Registrar and catalog management team",
+    ],
+    systems: [
+      "Curriculum proposal repository",
+      "SharePoint workflow site",
+      "Academic catalog publishing workflow",
+    ],
+    risks: [
+      "Committee meeting cadence misaligned with delivery timeline",
+      "Role ambiguity between departments and governance groups",
+      "Late scope additions near policy review",
+    ],
+  },
+  {
+    projectTitle: "Campus-Wide Multi-Factor Authentication Rollout",
+    projectGoal: "Achieve 95% MFA enrollment for faculty, staff, and students before term start.",
+    ownerName: "Jordan Patel",
+    ownerArea: "Information Security",
+    problem: "The current identity security posture depends heavily on password-only access for several systems. Security incidents and audit findings require a staged MFA rollout with clear support and communication plans.",
+    outcomes: [
+      "Deploy phased MFA enrollment by user segment",
+      "Launch support playbooks for enrollment and account recovery",
+      "Track adoption and unresolved exceptions weekly",
+    ],
+    constraints: {
+      budget: "Fixed security program allocation with no contingency budget",
+      staffing: "Security lead, IAM engineer, service desk lead, communications/training lead",
+      compliance: "Security audit controls and accessibility support requirements",
+      tech: "Integrate with existing SSO and identity provider",
+    },
+    goLiveOffsetDays: 84,
+    urgency: "Critical",
+    stakeholders: [
+      "Information Security leadership",
+      "IT support and service desk",
+      "Faculty and student support offices",
+      "Communications and training teams",
+    ],
+    systems: [
+      "Identity provider and SSO portal",
+      "Email and collaboration suite",
+      "Student and HR enterprise systems",
+    ],
+    risks: [
+      "Service desk overload during enrollment peak",
+      "User resistance due to poor onboarding communication",
+      "Integration issues with legacy applications",
+    ],
+  },
+  {
+    projectTitle: "Facilities Work Order Intake Optimization",
+    projectGoal: "Improve work-order intake quality and reduce assignment delays by 40%.",
+    ownerName: "Nina Alvarez",
+    ownerArea: "Facilities Operations",
+    problem: "Facilities work requests arrive through email, calls, and ad-hoc forms with missing details. Dispatching is delayed due to repeated clarifications and inconsistent priority assignment.",
+    outcomes: [
+      "Consolidate all requests into one standardized intake path",
+      "Define triage priorities and assignment rules",
+      "Create weekly operational reporting on backlog and turnaround time",
+    ],
+    constraints: {
+      budget: "Limited to process and configuration updates only",
+      staffing: "Operations PM, dispatcher leads, maintenance supervisors, reporting analyst",
+      compliance: "Safety and emergency escalation policies must be preserved",
+      tech: "Use existing work-order platform and Microsoft Forms",
+    },
+    goLiveOffsetDays: 70,
+    urgency: "High",
+    stakeholders: [
+      "Facilities leadership",
+      "Dispatch and maintenance teams",
+      "Campus operations offices",
+      "Safety and risk management",
+    ],
+    systems: [
+      "Facilities work-order system",
+      "Microsoft Forms intake",
+      "Operations reporting dashboard",
+    ],
+    risks: [
+      "Incomplete intake adoption from campuses",
+      "Backlog spike during transition period",
+      "Priority criteria not applied consistently",
+    ],
+  },
+  {
+    projectTitle: "Research Data Governance Launch for Grant Programs",
+    projectGoal: "Stand up a governance framework for grant data intake, access, and reporting in one quarter.",
+    ownerName: "Samuel Brooks",
+    ownerArea: "Research Administration",
+    problem: "Grant-related data definitions, access approvals, and reporting responsibilities vary by unit. Inconsistent controls create audit and reporting risk for active grant programs.",
+    outcomes: [
+      "Define governance roles and decision rights for grant data",
+      "Implement intake and approval workflow for data requests",
+      "Publish baseline reporting standards and quality checks",
+    ],
+    constraints: {
+      budget: "Fixed program budget with limited procurement lead time",
+      staffing: "Program PM, data steward, compliance lead, BI analyst, legal SME",
+      compliance: "Data privacy, grant reporting, and records retention requirements",
+      tech: "Leverage existing data warehouse and reporting tools",
+    },
+    goLiveOffsetDays: 126,
+    urgency: "Moderate",
+    stakeholders: [
+      "Research administration leadership",
+      "Principal investigators and grant managers",
+      "Data governance and compliance teams",
+      "Finance and reporting offices",
+    ],
+    systems: [
+      "Grant management system",
+      "Enterprise data warehouse",
+      "Power BI reporting workspace",
+    ],
+    risks: [
+      "Conflicting data definitions across units",
+      "Approval bottlenecks for sensitive data access",
+      "Reporting gaps during initial transition",
+    ],
+  },
+];
+
 init();
 
 function init() {
@@ -73,6 +282,7 @@ function init() {
   syncAIControls(true);
   attachEventHandlers();
   setActiveTab("intake");
+  setActiveSolutionTab("summary");
   if (state.versions.length > 0) {
     state.currentPack = state.versions[0];
     renderSolutionPack(state.currentPack);
@@ -87,6 +297,12 @@ function init() {
 function attachEventHandlers() {
   tabs.forEach((tab) => {
     tab.addEventListener("click", () => setActiveTab(tab.dataset.tab));
+  });
+
+  solutionSubTabs.forEach((tab) => {
+    tab.addEventListener("click", () => {
+      setActiveSolutionTab(tab.dataset.solutionTab || "summary");
+    });
   });
 
   intakeForm.addEventListener("input", () => {
@@ -122,6 +338,67 @@ function attachEventHandlers() {
       : "Solution pack generated and saved to version history.";
   });
 
+  const loadSampleDataEl = document.getElementById("loadSampleData");
+  if (loadSampleDataEl) {
+    loadSampleDataEl.addEventListener("click", () => {
+      const sample = getNextSampleProject();
+      populateSampleIntakeForm(sample);
+      const intake = getIntakeData();
+      renderFollowUps(buildFollowUpQuestions(intake));
+      ensureRetentionWindowActive();
+      generationStatusEl.textContent = `Sample loaded: ${sample.projectTitle}. Click Generate Solution Pack to create a complete example.`;
+    });
+  }
+
+  if (quickJumpSelectEl) {
+    quickJumpSelectEl.addEventListener("change", () => {
+      const target = normalize(quickJumpSelectEl.value) || "summary";
+      const tabTarget = target === "nextsteps" ? "deliverables" : target;
+      setActiveSolutionTab(tabTarget);
+      const anchor = document.querySelector(`[data-section-anchor="${target}"]`) || document.querySelector(`[data-section-anchor="${tabTarget}"]`);
+      if (anchor) {
+        anchor.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    });
+  }
+
+  if (quickTogglePanelsEl) {
+    quickTogglePanelsEl.addEventListener("click", () => {
+      const collapseAll = quickTogglePanelsEl.dataset.mode !== "collapsed";
+      setSolutionPanelsCollapsed(collapseAll);
+    });
+  }
+
+  if (quickCopyBtnEl) {
+    quickCopyBtnEl.addEventListener("click", async () => {
+      if (!ensurePackExists()) return;
+      const selection = normalize(quickCopySelectEl?.value);
+      await copyQuickSelection(selection);
+    });
+  }
+
+  if (quickExportPdfBtnEl) {
+    quickExportPdfBtnEl.addEventListener("click", () => {
+      document.getElementById("printPdf")?.click();
+    });
+  }
+
+  if (copyRaidSnapshotEl) {
+    copyRaidSnapshotEl.addEventListener("click", async () => {
+      if (!ensurePackExists()) return;
+      await copyText(renderRaidSnapshotText());
+      generationStatusEl.textContent = "RAID snapshot copied.";
+    });
+  }
+
+  if (copyWorkstreamsEl) {
+    copyWorkstreamsEl.addEventListener("click", async () => {
+      if (!ensurePackExists()) return;
+      await copyText(renderWorkstreamsText(state.currentPack));
+      generationStatusEl.textContent = "Workstreams copied.";
+    });
+  }
+
   document.querySelectorAll(".copy-btn").forEach((btn) => {
     btn.addEventListener("click", async () => {
       if (!ensurePackExists()) return;
@@ -154,16 +431,26 @@ function attachEventHandlers() {
     generationStatusEl.textContent = "Full solution pack copied to clipboard.";
   });
 
-  document.getElementById("printPdf").addEventListener("click", () => {
-    if (!state.currentPack) {
-      generationStatusEl.textContent = "Generate a solution pack before exporting.";
-      return;
-    }
-    setActiveTab("export");
-    window.requestAnimationFrame(() => {
-      window.print();
+  if (exportSolutionPdfEl) {
+    exportSolutionPdfEl.addEventListener("click", () => {
+      if (!ensurePackExists()) return;
+      exportSolutionPackPdf();
     });
-  });
+  }
+
+  const printPdfEl = document.getElementById("printPdf");
+  if (printPdfEl) {
+    printPdfEl.addEventListener("click", () => {
+      if (!state.currentPack) {
+        generationStatusEl.textContent = "Generate a solution pack before exporting.";
+        return;
+      }
+      setActiveTab("export");
+      window.requestAnimationFrame(() => {
+        window.print();
+      });
+    });
+  }
 
   document.getElementById("clearHistory").addEventListener("click", () => {
     state.versions = [];
@@ -245,10 +532,120 @@ function setActiveTab(key) {
   });
 
   Object.entries(panels).forEach(([panelKey, panel]) => {
+    if (!panel) return;
     const isActive = panelKey === key;
     panel.classList.toggle("active", isActive);
     panel.hidden = !isActive;
   });
+}
+
+function getActiveTabKey() {
+  const activeTab = document.querySelector(".tab-btn.active");
+  return normalize(activeTab?.dataset?.tab) || "intake";
+}
+
+function exportSolutionPackPdf() {
+  if (!panels.solution) {
+    generationStatusEl.textContent = "Solution Pack view is not available for export.";
+    return;
+  }
+
+  const previousTab = getActiveTabKey();
+  let hasCleanedUp = false;
+  const cleanup = () => {
+    if (hasCleanedUp) return;
+    hasCleanedUp = true;
+    document.body.classList.remove("print-solution-pack");
+    if (previousTab && previousTab !== "solution") {
+      setActiveTab(previousTab);
+    }
+  };
+
+  setActiveTab("solution");
+  document.body.classList.add("print-solution-pack");
+  generationStatusEl.textContent = "Preparing Solution Pack PDF export...";
+
+  window.addEventListener("afterprint", cleanup, { once: true });
+
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
+      window.print();
+      window.setTimeout(cleanup, 1200);
+      generationStatusEl.textContent = "PDF export opened. Use Save as PDF in the print dialog.";
+    });
+  });
+}
+
+function setActiveSolutionTab(key) {
+  const safeKey = normalize(key) || "summary";
+
+  solutionSubTabs.forEach((tab) => {
+    const isActive = tab.dataset.solutionTab === safeKey;
+    tab.classList.toggle("active", isActive);
+    tab.setAttribute("aria-selected", isActive ? "true" : "false");
+    tab.setAttribute("tabindex", isActive ? "0" : "-1");
+  });
+
+  solutionPanels.forEach((panel) => {
+    const isActive = panel.id === `solution-panel-${safeKey}`;
+    panel.classList.toggle("active", isActive);
+    panel.hidden = !isActive;
+  });
+
+  if (quickJumpSelectEl && quickJumpSelectEl.value !== safeKey) {
+    const exists = Array.from(quickJumpSelectEl.options).some((opt) => opt.value === safeKey);
+    if (exists) quickJumpSelectEl.value = safeKey;
+  }
+}
+
+function setSolutionPanelsCollapsed(collapsed) {
+  const collapsibleCards = document.querySelectorAll(".quick-panel[data-collapsible]");
+  collapsibleCards.forEach((card) => {
+    card.classList.toggle("is-collapsed", collapsed);
+  });
+
+  if (quickTogglePanelsEl) {
+    quickTogglePanelsEl.dataset.mode = collapsed ? "collapsed" : "expanded";
+    quickTogglePanelsEl.textContent = collapsed ? "Expand All" : "Collapse All";
+  }
+}
+
+async function copyQuickSelection(selection) {
+  const timeline = getTimelineData(state.currentPack);
+  const matrix = getMatrixData(state.currentPack, timeline);
+
+  if (selection === "timeline") {
+    await copyText(renderTimelineText(timeline));
+    generationStatusEl.textContent = "Timeline copied.";
+    return;
+  }
+
+  if (selection === "matrix") {
+    await copyText(renderMatrixText(matrix));
+    generationStatusEl.textContent = "Tracker matrix copied.";
+    return;
+  }
+
+  if (selection === "raid") {
+    await copyText(renderRaidSnapshotText());
+    generationStatusEl.textContent = "RAID snapshot copied.";
+    return;
+  }
+
+  if (selection === "full") {
+    await copyText(renderFullPackText(state.currentPack));
+    generationStatusEl.textContent = "Full solution pack copied.";
+    return;
+  }
+
+  if (selection && sectionEls[selection]) {
+    await copyText(sectionEls[selection].textContent || "");
+    generationStatusEl.textContent = "Selected section copied.";
+    return;
+  }
+
+  await copyText(renderFullPackText(state.currentPack));
+  generationStatusEl.textContent = "Full solution pack copied.";
 }
 
 function getSelectedComplexity() {
@@ -321,6 +718,68 @@ function getIntakeData() {
   };
 }
 
+function populateSampleIntakeForm(sampleProject) {
+  if (!sampleProject) return;
+  const sampleGoLive = toInputDate(addDays(new Date(), sampleProject.goLiveOffsetDays || 112));
+  const sampleFields = {
+    projectTitle: sampleProject.projectTitle,
+    projectGoal: sampleProject.projectGoal,
+    ownerName: sampleProject.ownerName,
+    ownerArea: sampleProject.ownerArea,
+    problem: sampleProject.problem,
+    outcomes: (sampleProject.outcomes || []).join("\n"),
+    constraintBudget: sampleProject.constraints?.budget || "",
+    constraintStaffing: sampleProject.constraints?.staffing || "",
+    constraintCompliance: sampleProject.constraints?.compliance || "",
+    constraintTech: sampleProject.constraints?.tech || "",
+    goLiveDate: sampleGoLive,
+    urgency: sampleProject.urgency || "Moderate",
+    stakeholders: (sampleProject.stakeholders || []).join("\n"),
+    systems: (sampleProject.systems || []).join("\n"),
+    risks: (sampleProject.risks || []).join("\n"),
+  };
+
+  Object.entries(sampleFields).forEach(([fieldId, value]) => {
+    const field = document.getElementById(fieldId);
+    if (!field) return;
+    field.value = value;
+  });
+
+  const standardComplexity = document.querySelector('input[name="complexity"][value="Standard"]');
+  if (standardComplexity) standardComplexity.checked = true;
+
+  document.querySelectorAll(".intake-section").forEach((section) => {
+    section.open = true;
+  });
+}
+
+function getNextSampleProject() {
+  const nextIndex = loadSampleRotationIndex();
+  const normalizedIndex = nextIndex >= 0 ? nextIndex % SAMPLE_PROJECTS.length : 0;
+  const sample = SAMPLE_PROJECTS[normalizedIndex];
+  const followingIndex = (normalizedIndex + 1) % SAMPLE_PROJECTS.length;
+  persistSampleRotationIndex(followingIndex);
+  return sample;
+}
+
+function loadSampleRotationIndex() {
+  try {
+    const raw = sessionStorage.getItem(SAMPLE_ROTATION_KEY);
+    const index = Number(raw);
+    return Number.isInteger(index) && index >= 0 ? index : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function persistSampleRotationIndex(index) {
+  try {
+    sessionStorage.setItem(SAMPLE_ROTATION_KEY, String(index));
+  } catch {
+    // Ignore storage failures; rotation will restart from first sample.
+  }
+}
+
 function normalize(value) {
   return (value || "").toString().trim();
 }
@@ -386,6 +845,7 @@ function buildSolutionPack(intake, complexity, followups, aiConfig = { mode: "lo
   const context = buildContext(intake, complexity, submissionTimestamp);
   const timeline = buildTimelineData(context);
   const workMatrix = buildWorkMatrix(intake, context, timeline);
+  const workstreams = buildWorkstreamsData(intake, context);
   const cloudReady = isCloudMode(aiConfig) && isAIProviderConfigured(aiConfig);
   const effectiveMode = cloudReady ? "cloud" : "local";
   const providerLabel = cloudReady
@@ -417,9 +877,99 @@ function buildSolutionPack(intake, complexity, followups, aiConfig = { mode: "lo
     context,
     timeline,
     workMatrix,
+    workstreams,
     aiMeta,
     sections,
   };
+}
+
+function buildWorkstreamsData(intake, context = {}) {
+  const streams = [];
+  const outcomes = Array.isArray(intake?.outcomes) ? intake.outcomes : [];
+  const stakeholders = Array.isArray(intake?.stakeholders) ? intake.stakeholders : [];
+  const systems = Array.isArray(intake?.systems) ? intake.systems : [];
+  const risks = Array.isArray(intake?.risks) ? intake.risks : [];
+  const constraints = intake?.constraints || {};
+  const problemText = normalize(intake?.problem);
+  const goalText = normalize(intake?.projectGoal);
+  const scenario = (normalize(context.scenarioType) || "Cross-functional").toLowerCase();
+  const primaryOutcome = outcomes[0] || "the stated project outcomes";
+  const keyStakeholders = stakeholders.slice(0, 2).join(" and ") || "key stakeholder groups";
+  const techFocus = constraints.tech || systems[0] || "approved enterprise systems";
+  const complianceFocus = constraints.compliance || "applicable policy, security, and accessibility requirements";
+  const riskFocus = risks[0] || "cross-team dependencies and unresolved delivery blockers";
+  const hasCompliance = Boolean(constraints.compliance) || /policy|compliance|legal|security|accessibility/i.test(`${problemText} ${goalText}`);
+  const hasDataReporting = /data|report|dashboard|analytics|metrics?/i.test(
+    `${problemText} ${goalText} ${outcomes.join(" ")} ${systems.join(" ")}`
+  );
+
+  const addWorkstream = (name, focus, suggestedRole) => {
+    streams.push({
+      name,
+      focus,
+      pendingOwner: `To be assigned (${suggestedRole})`,
+    });
+  };
+
+  addWorkstream(
+    "Governance and Decisioning",
+    `Set decision rights, escalation path, and governance cadence for this ${scenario} initiative.`,
+    "Sponsor / PM"
+  );
+
+  addWorkstream(
+    "Requirements and Process Design",
+    `Define requirements, workflow handoffs, and acceptance criteria needed to deliver ${primaryOutcome}.`,
+    "Product Owner / Business Analyst"
+  );
+
+  addWorkstream(
+    "Delivery and Implementation",
+    `Coordinate build/configuration, testing, and deployment activities across ${techFocus}.`,
+    "Tech Lead / Delivery Lead"
+  );
+
+  addWorkstream(
+    "Communications",
+    `Prepare and deliver clear project communications for ${keyStakeholders}, including updates, decisions, and rollout notices.`,
+    "Communications Lead"
+  );
+
+  addWorkstream(
+    "Training",
+    "Design and execute role-based training, enablement materials, and readiness support before go-live.",
+    "Training Lead"
+  );
+
+  addWorkstream(
+    "Data Integration",
+    `Coordinate data mapping, integration dependencies, and validation checkpoints across ${techFocus}.`,
+    "Data Integration Lead"
+  );
+
+  addWorkstream(
+    "Risk and Dependency Management",
+    `Track, escalate, and mitigate risks and dependencies, including ${riskFocus}.`,
+    "Project Manager"
+  );
+
+  if (hasCompliance) {
+    addWorkstream(
+      "Compliance and Controls",
+      `Validate controls and approvals against ${complianceFocus} before go-live decisions.`,
+      "Compliance / Security Lead"
+    );
+  }
+
+  if (hasDataReporting) {
+    addWorkstream(
+      "Data and Reporting",
+      "Define core metrics, reporting cadence, and data-quality checkpoints for leadership visibility.",
+      "Data / Reporting Lead"
+    );
+  }
+
+  return streams;
 }
 
 function buildContext(intake, complexity, submissionTimestamp) {
@@ -480,33 +1030,33 @@ function buildContext(intake, complexity, submissionTimestamp) {
 function buildMilestones(submissionTimestamp, goLiveDate, urgency, timelineConstraint = "") {
   const phases = [
     {
-      phase: "Planning and mobilization",
+      phase: "Initiation",
       milestone: "Charter, scope, governance, and success metrics approved",
-      stage: "Planning",
+      stage: "Initiation",
       weight: 0.18,
     },
     {
-      phase: "Planning to execution handoff",
+      phase: "Planning",
       milestone: "Requirements baseline, dependency map, and resourcing confirmed",
       stage: "Planning",
       weight: 0.14,
     },
     {
-      phase: "Execution wave",
+      phase: "Execution",
       milestone: "Solution build/configuration complete and quality-checked",
       stage: "Execution",
       weight: 0.38,
     },
     {
-      phase: "Monitoring and control",
+      phase: "Monitor",
       milestone: "Risk, status, and quality checkpoints passed for launch readiness",
-      stage: "Monitoring",
+      stage: "Monitor",
       weight: 0.2,
     },
     {
-      phase: "Completion and stabilization",
+      phase: "Closing",
       milestone: "Go-live completed with hypercare and handoff to operations",
-      stage: "Monitoring",
+      stage: "Closing",
       weight: 0.1,
     },
   ];
@@ -640,7 +1190,7 @@ function buildExecutiveSummary(intake, context, followups) {
     `- Primary outcomes to track: ${outcomes}.`,
     `- Top constraints: ${context.topConstraints.join(" | ")}.`,
     `- Timeline anchor: start on ${context.timelineAnchorLabel}; planned completion by ${context.timelineEndLabel}.`,
-    "- Phase progression: Planning -> Execution -> Monitoring -> Completion with named checkpoints and owners.",
+    "- Phase progression: Initiation -> Planning -> Execution -> Monitor -> Closing with named checkpoints and owners.",
     `- Recommended approach: ${approach}`,
     `- Sponsor accountability: ${context.ownerLabel}.`,
     `- Assumptions and intake gaps: ${assumptions}`,
@@ -701,7 +1251,7 @@ function buildProcessModel(intake, context) {
 
   return [
     "High-level end-to-end process model:",
-    "Intake -> Plan -> Execute -> Monitor -> Validate -> Launch",
+    "Intake -> Initiation -> Planning -> Execution -> Monitor -> Closing",
     "",
     "Workflow mapping suggestions:",
     "- Intake handoff: Sponsor submits scope intent; PM validates clarity and dependencies within 2 business days.",
@@ -784,7 +1334,7 @@ function buildPlanningDeliverables(intake, context) {
     "Stakeholder responsibilities (kickoff baseline):",
     stakeholderResponsibilities,
     "",
-    "Checkpoint schedule (planning, execution, monitoring):",
+    "Checkpoint schedule (Initiation, Planning, Execution, Monitor, Closing):",
     checkpointPlan,
     "",
     "RAID log starter (top 5 risks + mitigations):",
@@ -803,7 +1353,7 @@ function buildExecutionModel(intake, context) {
     "- Weekly status review: progress, milestones, blockers, risks, and decisions.",
     "- Action log review: verify owner, due date, status, and blocker notes.",
     "- Decision log review: unresolved decisions, decision owner, due date, impact.",
-    "- Monitoring checkpoint review: verify phase exit criteria before moving forward.",
+    "- Monitor checkpoint review: verify phase exit criteria before moving forward.",
     "",
     "Ownership model for deliverables:",
     "- Sponsor owns strategic decisions and benefit realization.",
@@ -1413,6 +1963,304 @@ function renderMatrix(matrixRows) {
   });
 }
 
+function normalizePhaseLabel(label) {
+  const text = normalize(label).toLowerCase();
+  if (text === "monitor") return "M&C";
+  if (text === "closing") return "Closure";
+  if (text === "initiation") return "Initiation";
+  if (text === "planning") return "Planning";
+  if (text === "execution") return "Execution";
+  if (text === "m&c") return "M&C";
+  if (text === "closure") return "Closure";
+  return capitalize(text) || "Initiation";
+}
+
+function renderProjectStatus(pack, timeline, matrixRows) {
+  const statuses = timeline.map((item, index) => getPhaseProgressStatus(item, index, timeline));
+  const completeCount = statuses.filter((status) => status === "Complete").length;
+  const hasInProgress = statuses.includes("In Progress");
+  const progressPercent = timeline.length
+    ? Math.max(0, Math.min(100, Math.round(((completeCount + (hasInProgress ? 0.5 : 0)) / timeline.length) * 100)))
+    : 0;
+
+  let currentIndex = statuses.indexOf("In Progress");
+  if (currentIndex < 0) {
+    currentIndex = completeCount >= timeline.length && timeline.length ? timeline.length - 1 : 0;
+  }
+  const currentPhaseRaw = timeline[currentIndex]?.phase || "Initiation";
+  const currentPhase = normalizePhaseLabel(currentPhaseRaw);
+
+  if (statusPhaseLabelEl) statusPhaseLabelEl.textContent = `Current phase: ${currentPhase}`;
+  if (statusPercentLabelEl) statusPercentLabelEl.textContent = `${progressPercent}%`;
+
+  if (statusProgressFillEl) {
+    statusProgressFillEl.style.width = `${progressPercent}%`;
+    statusProgressFillEl.parentElement?.setAttribute("aria-valuenow", String(progressPercent));
+  }
+
+  const priority = pack?.intakeSnapshot?.urgency || pack?.context?.urgencyProfile || "Moderate";
+  if (statusPriorityBadgeEl) {
+    statusPriorityBadgeEl.textContent = `Priority: ${priority}`;
+    statusPriorityBadgeEl.className = `status-kpi-badge priority-${normalize(priority).toLowerCase() || "moderate"}`;
+  }
+
+  const complexity = pack?.complexity || "Standard";
+  if (statusComplexityBadgeEl) {
+    statusComplexityBadgeEl.textContent = `Complexity: ${complexity}`;
+    statusComplexityBadgeEl.className = `status-kpi-badge complexity-${normalize(complexity).toLowerCase() || "standard"}`;
+  }
+
+  if (phaseStepperEl) {
+    phaseStepperEl.innerHTML = "";
+    const currentStep = STATUS_PHASES.indexOf(currentPhase);
+    STATUS_PHASES.forEach((phase, index) => {
+      const li = document.createElement("li");
+      li.className = "step-box";
+      if (index < currentStep) li.classList.add("step-complete");
+      if (index === currentStep) li.classList.add("step-active");
+      li.textContent = phase;
+      phaseStepperEl.appendChild(li);
+    });
+  }
+
+  renderMiniMetrics(pack, timeline, matrixRows);
+}
+
+function renderMiniMetrics(pack, timeline, matrixRows) {
+  if (!miniMetricsEl) return;
+  const stakeholders = pack?.intakeSnapshot?.stakeholders?.length || 0;
+  const risks = pack?.intakeSnapshot?.risks?.length || 0;
+  const deliverables = matrixRows?.length || 0;
+  const targetDate = timeline[timeline.length - 1]?.targetISO || timeline[timeline.length - 1]?.targetDate;
+  const target = parseFlexibleDate(targetDate);
+  const gapDays = target ? daysUntilDate(target) : null;
+
+  const cards = [
+    { label: "Stakeholders", value: stakeholders || "0" },
+    { label: "Deliverables", value: deliverables || "0" },
+    { label: "Risks", value: risks || "0" },
+    { label: "Days to target", value: gapDays === null ? "--" : String(gapDays) },
+  ];
+
+  miniMetricsEl.innerHTML = "";
+  cards.forEach((card) => {
+    const div = document.createElement("div");
+    div.className = "mini-metric-card";
+    div.innerHTML = `<span class="mini-metric-value">${card.value}</span><span class="mini-metric-label">${card.label}</span>`;
+    miniMetricsEl.appendChild(div);
+  });
+}
+
+function daysUntilDate(dateValue) {
+  const target = parseFlexibleDate(dateValue);
+  if (!target) return null;
+  const today = startOfDay(new Date());
+  const diffMs = target.getTime() - today.getTime();
+  return Math.round(diffMs / (24 * 60 * 60 * 1000));
+}
+
+function renderOutcomeCharts(pack, timeline, matrixRows) {
+  renderPhaseDurationChart(timeline);
+  renderEffortAllocationChart(pack, timeline, matrixRows);
+}
+
+function renderPhaseDurationChart(timeline) {
+  if (!phaseDurationChartEl) return;
+
+  if (!timeline.length) {
+    phaseDurationChartEl.innerHTML = '<p class="chart-empty">Generate a solution pack to view phase durations.</p>';
+    return;
+  }
+
+  const rows = timeline.map((item, index) => {
+    const durationDays = estimatePhaseDurationDays(item, index, timeline);
+    return {
+      phase: normalizePhaseLabel(item.phase || item.stage || `Phase ${index + 1}`),
+      days: durationDays,
+    };
+  });
+
+  const maxDays = Math.max(...rows.map((row) => row.days), 1);
+  phaseDurationChartEl.innerHTML = rows.map((row) => {
+    const width = Math.max(6, Math.round((row.days / maxDays) * 100));
+    return `
+      <div class="bar-row">
+        <span class="bar-label">${row.phase}</span>
+        <div class="bar-track"><span class="bar-fill" style="width:${width}%"></span></div>
+        <span class="bar-value">${row.days}d</span>
+      </div>
+    `;
+  }).join("");
+}
+
+function renderEffortAllocationChart(pack, timeline, matrixRows) {
+  if (!effortDonutEl || !effortLegendEl) return;
+
+  const buckets = [
+    { key: "Initiation", color: "var(--accent-summary)" },
+    { key: "Planning", color: "var(--accent-governance)" },
+    { key: "Execution", color: "var(--accent-deliverables)" },
+    { key: "M&C", color: "var(--accent-risks)" },
+    { key: "Closure", color: "var(--accent-next)" },
+  ];
+
+  const totals = {};
+  buckets.forEach((bucket) => { totals[bucket.key] = 0; });
+
+  timeline.forEach((item, index) => {
+    const phase = normalizePhaseLabel(item.phase || item.stage || `Phase ${index + 1}`);
+    const days = estimatePhaseDurationDays(item, index, timeline);
+    totals[phase] = (totals[phase] || 0) + days;
+  });
+
+  const totalDays = Object.values(totals).reduce((sum, value) => sum + value, 0) || 1;
+  let cursor = 0;
+  const gradientStops = [];
+  const legendItems = [];
+
+  buckets.forEach((bucket) => {
+    const value = totals[bucket.key] || 0;
+    const percent = Math.round((value / totalDays) * 100);
+    const start = cursor;
+    const end = cursor + (value / totalDays) * 100;
+    cursor = end;
+
+    gradientStops.push(`${bucket.color} ${start.toFixed(2)}% ${end.toFixed(2)}%`);
+    legendItems.push(`<li><span class="legend-swatch" style="background:${bucket.color}"></span><span>${bucket.key}: ${percent}%</span></li>`);
+  });
+
+  effortDonutEl.style.background = `conic-gradient(${gradientStops.join(", ")})`;
+  const workstreams = new Set((matrixRows || []).map((row) => normalize(row.owner))).size;
+  effortDonutEl.innerHTML = `<span>${workstreams || 0} owners</span>`;
+  effortLegendEl.innerHTML = legendItems.join("");
+}
+
+function estimatePhaseDurationDays(item, index, timeline) {
+  const start = parseFlexibleDate(item.startISO || item.window?.split("-")[0] || "");
+  const end = parseFlexibleDate(item.targetISO || item.targetDate || "");
+  if (start && end) {
+    return Math.max(1, daysBetween(start, end));
+  }
+  if (index === 0) return 14;
+  const prevEnd = parseFlexibleDate(timeline[index - 1]?.targetISO || timeline[index - 1]?.targetDate || "");
+  if (prevEnd && end) return Math.max(1, daysBetween(prevEnd, end));
+  return 14;
+}
+
+function getWorkstreamsData(pack) {
+  const fromPack = Array.isArray(pack?.workstreams) ? pack.workstreams : [];
+  const sanitized = fromPack
+    .map((stream) => ({
+      name: normalize(stream?.name),
+      focus: normalize(stream?.focus),
+      pendingOwner: normalize(stream?.pendingOwner),
+    }))
+    .filter((stream) => stream.name || stream.focus || stream.pendingOwner);
+
+  if (sanitized.length) return sanitized;
+
+  const intake = pack?.intakeSnapshot || {
+    projectTitle: "",
+    projectGoal: "",
+    problem: "",
+    outcomes: [],
+    stakeholders: [],
+    systems: [],
+    risks: [],
+    constraints: { time: "", budget: "", staffing: "", compliance: "", tech: "" },
+  };
+  const context = pack?.context || {};
+  return buildWorkstreamsData(intake, context);
+}
+
+function renderWorkstreams(pack) {
+  if (!workstreamsListEl) return;
+
+  const streams = getWorkstreamsData(pack);
+  workstreamsListEl.innerHTML = "";
+
+  if (!streams.length) {
+    const empty = document.createElement("li");
+    empty.textContent = "No workstreams available. Add more intake details and regenerate.";
+    workstreamsListEl.appendChild(empty);
+    return;
+  }
+
+  streams.forEach((stream, index) => {
+    const item = document.createElement("li");
+    item.className = "workstream-item";
+
+    const title = document.createElement("p");
+    title.className = "workstream-title";
+    title.textContent = `${index + 1}. ${stream.name || `Workstream ${index + 1}`}`;
+
+    const focus = document.createElement("p");
+    focus.className = "workstream-focus";
+    focus.textContent = stream.focus || "Focus to be defined.";
+
+    const owner = document.createElement("p");
+    owner.className = "workstream-owner";
+    owner.textContent = `Pending owner: ${stream.pendingOwner || "To be assigned"}`;
+
+    item.appendChild(title);
+    item.appendChild(focus);
+    item.appendChild(owner);
+    workstreamsListEl.appendChild(item);
+  });
+}
+
+function renderWorkstreamsText(pack) {
+  const streams = getWorkstreamsData(pack);
+  if (!streams.length) return "- No workstreams available.";
+
+  return streams
+    .map((stream, index) => {
+      const name = stream.name || `Workstream ${index + 1}`;
+      const focus = stream.focus || "Focus to be defined.";
+      const owner = stream.pendingOwner || "To be assigned";
+      return `${index + 1}. ${name}\n   Focus: ${focus}\n   Pending owner: ${owner}`;
+    })
+    .join("\n");
+}
+
+function renderRaidSnapshot(pack) {
+  if (!raidSnapshotListEl) return;
+  const items = getRaidSnapshotItems(pack);
+  raidSnapshotListEl.innerHTML = "";
+  if (!items.length) {
+    const li = document.createElement("li");
+    li.textContent = "No risks/issues listed yet. Add risks in Intake to populate this module.";
+    raidSnapshotListEl.appendChild(li);
+    return;
+  }
+
+  items.forEach((item) => {
+    const li = document.createElement("li");
+    li.textContent = item;
+    raidSnapshotListEl.appendChild(li);
+  });
+}
+
+function getRaidSnapshotItems(pack) {
+  const sectionD = getPackSection(pack, "sectionD");
+  const raidLines = sectionD
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => /^\d+\)\s*Risk:/i.test(line))
+    .slice(0, 5);
+
+  if (raidLines.length) return raidLines;
+
+  const risks = pack?.intakeSnapshot?.risks || [];
+  return risks.slice(0, 5).map((risk, index) => `${index + 1}) Risk: ${risk} | Mitigation: assign owner, due date, and weekly follow-up.`);
+}
+
+function renderRaidSnapshotText() {
+  if (!raidSnapshotListEl) return "- No RAID snapshot available.";
+  const lines = Array.from(raidSnapshotListEl.querySelectorAll("li")).map((li) => `- ${li.textContent}`);
+  return lines.length ? lines.join("\n") : "- No RAID snapshot available.";
+}
+
 function renderTimelineText(timeline) {
   if (!timeline.length) return "- No milestones available.";
   return timeline
@@ -1537,15 +2385,33 @@ function getPackSection(pack, key) {
   return normalize(pack?.sections?.[key]);
 }
 
+function renderSolutionPdfHeader(pack) {
+  if (!solutionPdfProjectNameEl || !solutionPdfProjectSummaryEl) return;
+
+  const projectName = normalize(pack?.intakeSnapshot?.projectTitle) || normalize(pack?.title) || "Untitled Project";
+  const projectGoal = normalize(pack?.intakeSnapshot?.projectGoal) || "deliver defined outcomes and measurable value";
+  const scenario = (normalize(pack?.context?.scenarioType) || "cross-functional").toLowerCase();
+  const owner = normalize(pack?.context?.ownerLabel) || "the sponsor and delivery team";
+
+  solutionPdfProjectNameEl.textContent = projectName;
+  solutionPdfProjectSummaryEl.textContent = `${projectName} is a ${scenario} initiative focused on ${projectGoal}. This PDF contains the complete Project Management Solution Pack prepared for kickoff and execution planning. It includes the executive summary, delivery timeline, governance model, role ownership, planning deliverables, and sequenced next steps for ${owner}.`;
+}
+
 function renderSolutionPack(pack) {
   const scenario = pack.context?.scenarioType || "Cross-functional";
   const aiLabel = pack.aiMeta?.provider ? ` | AI: ${pack.aiMeta.provider}` : " | AI: Local assistant";
   solutionMetaEl.textContent = `${pack.title} | ${pack.complexity} complexity | ${scenario} | Generated ${formatDateTime(pack.createdAt)}${aiLabel}`;
+  renderSolutionPdfHeader(pack);
   const timeline = getTimelineData(pack);
   const matrix = getMatrixData(pack, timeline);
 
   renderTimeline(timeline);
   renderMatrix(matrix);
+  renderProjectStatus(pack, timeline, matrix);
+  renderOutcomeCharts(pack, timeline, matrix);
+  renderWorkstreams(pack);
+  renderRaidSnapshot(pack);
+  setSolutionPanelsCollapsed(false);
 
   Object.entries(pack.sections || {}).forEach(([key, text]) => {
     if (sectionEls[key]) {
@@ -1672,6 +2538,7 @@ function renderFullPackText(pack) {
   const timeline = getTimelineData(pack);
   const matrix = getMatrixData(pack, timeline);
   const aiSection = getAISectionText(pack);
+  const workstreams = renderWorkstreamsText(pack);
 
   return [
     "Project Management Solution Pack",
@@ -1695,6 +2562,9 @@ function renderFullPackText(pack) {
     "",
     "D) Planning deliverables",
     getPackSection(pack, "sectionD"),
+    "",
+    "Workstreams",
+    workstreams,
     "",
     "E) Execution + accountability",
     getPackSection(pack, "sectionE"),
@@ -1910,6 +2780,11 @@ function clearSessionData(statusMessage = "Session data cleared.") {
   state.retentionExpiresAt = null;
   state.retentionWarningShown = false;
   persistRetentionExpiry();
+  try {
+    sessionStorage.removeItem(SAMPLE_ROTATION_KEY);
+  } catch {
+    // Ignore storage failures.
+  }
 
   state.currentPack = null;
   state.versions = [];
@@ -1933,9 +2808,37 @@ function clearSessionData(statusMessage = "Session data cleared.") {
 
 function resetSolutionPackDisplays() {
   solutionMetaEl.textContent = "";
+  if (solutionPdfProjectNameEl) solutionPdfProjectNameEl.textContent = "Project Name";
+  if (solutionPdfProjectSummaryEl) {
+    solutionPdfProjectSummaryEl.textContent = "Generate a solution pack to prepare a distribution-ready PDF summary.";
+  }
   timelineVisualEl.innerHTML = '<li class="timeline-node timeline-empty">Generate a solution pack from Intake to view the timeline.</li>';
   if (timelineMetricsEl) timelineMetricsEl.innerHTML = "";
   matrixBodyEl.innerHTML = "<tr><td colspan=\"5\">Generate a solution pack from Intake to view the tracker matrix.</td></tr>";
+  if (phaseDurationChartEl) phaseDurationChartEl.innerHTML = '<p class="chart-empty">Generate a solution pack to view phase durations.</p>';
+  if (effortDonutEl) {
+    effortDonutEl.style.background = "var(--neutral-300)";
+    effortDonutEl.innerHTML = "<span>0 owners</span>";
+  }
+  if (effortLegendEl) effortLegendEl.innerHTML = "";
+  if (workstreamsListEl) workstreamsListEl.innerHTML = "<li>Generate a solution pack from Intake to view workstreams.</li>";
+  if (raidSnapshotListEl) raidSnapshotListEl.innerHTML = "<li>Generate a solution pack from Intake to view the RAID snapshot.</li>";
+
+  if (statusPriorityBadgeEl) statusPriorityBadgeEl.textContent = "Priority: --";
+  if (statusPriorityBadgeEl) statusPriorityBadgeEl.className = "status-kpi-badge";
+  if (statusComplexityBadgeEl) statusComplexityBadgeEl.textContent = "Complexity: --";
+  if (statusComplexityBadgeEl) statusComplexityBadgeEl.className = "status-kpi-badge";
+  if (statusPhaseLabelEl) statusPhaseLabelEl.textContent = "Current phase: --";
+  if (statusPercentLabelEl) statusPercentLabelEl.textContent = "0%";
+  if (statusProgressFillEl) {
+    statusProgressFillEl.style.width = "0%";
+    statusProgressFillEl.parentElement?.setAttribute("aria-valuenow", "0");
+  }
+  if (phaseStepperEl) {
+    phaseStepperEl.innerHTML = STATUS_PHASES.map((phase) => `<li class="step-box">${phase}</li>`).join("");
+  }
+  if (miniMetricsEl) miniMetricsEl.innerHTML = "";
+  setSolutionPanelsCollapsed(false);
 
   Object.values(sectionEls).forEach((el) => {
     if (el) {
@@ -2075,6 +2978,13 @@ function formatDate(dateValue) {
     month: "short",
     day: "numeric",
   });
+}
+
+function toInputDate(dateValue) {
+  const date = dateValue instanceof Date ? new Date(dateValue) : new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return "";
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 10);
 }
 
 function formatDateTime(dateValue) {
