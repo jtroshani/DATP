@@ -68,6 +68,18 @@ h1 {
   line-height: 1.2;
 }
 
+.app-description {
+  margin: 0.52rem 0 0;
+  max-width: 980px;
+  color: #2d4967;
+  font-size: 0.95rem;
+  line-height: 1.42;
+}
+
+.app-description strong {
+  color: #1e3f64;
+}
+
 h2,
 h3 {
   margin: 0;
