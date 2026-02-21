@@ -192,6 +192,81 @@ label {
   margin-top: -0.05rem;
 }
 
+.privacy-notice {
+  margin: 0.45rem 0 0.6rem;
+  border: 1px solid #cdddec;
+  border-radius: 12px;
+  background: #f8fbff;
+  padding: 0.72rem 0.82rem;
+}
+
+.privacy-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.62rem;
+}
+
+.info-icon {
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 999px;
+  border: 1px solid #9cb7d3;
+  color: #1f4b76;
+  font-size: 0.78rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  margin-top: 0.14rem;
+}
+
+.privacy-title {
+  margin: 0;
+  font-weight: 700;
+  color: #1a3f67;
+  font-size: 0.92rem;
+}
+
+.privacy-text {
+  margin: 0.22rem 0 0;
+  color: #2f4a68;
+  font-size: 0.88rem;
+  line-height: 1.38;
+}
+
+.privacy-learn-more {
+  margin-top: 0.42rem;
+}
+
+.privacy-learn-more > summary {
+  cursor: pointer;
+  color: #0f4a7b;
+  font-weight: 600;
+  width: fit-content;
+}
+
+.privacy-learn-more > summary:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--focus) 45%, transparent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+.privacy-learn-more ul {
+  margin: 0.38rem 0 0;
+  padding-left: 1.1rem;
+  color: #2d4662;
+  font-size: 0.88rem;
+  line-height: 1.35;
+}
+
+.retention-status {
+  margin: 0 0 0.65rem;
+  min-height: 1.1rem;
+  color: #2f4a68;
+  font-size: 0.84rem;
+}
+
 .is-hidden {
   display: none !important;
 }
@@ -680,6 +755,24 @@ button {
   gap: 0.55rem;
 }
 
+.app-footer-note {
+  margin-top: 0.9rem;
+  padding: 0.6rem 0.72rem;
+  border: 1px solid #d5e3f1;
+  border-radius: 10px;
+  background: #f8fbff;
+  display: flex;
+  gap: 0.52rem;
+  align-items: flex-start;
+}
+
+.app-footer-note p {
+  margin: 0;
+  color: #375470;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
 .help-panel {
   position: fixed;
   right: 1rem;
@@ -856,6 +949,24 @@ button {
     padding: 0.45rem 0.4rem;
     overflow-wrap: anywhere;
   }
+
+  .privacy-notice {
+    padding: 0.68rem 0.72rem;
+  }
+
+  .privacy-title {
+    font-size: 0.9rem;
+  }
+
+  .privacy-text,
+  .privacy-learn-more ul,
+  .retention-status {
+    font-size: 0.82rem;
+  }
+
+  .app-footer-note {
+    padding: 0.56rem 0.62rem;
+  }
 }
 
 @media (max-width: 640px) {
@@ -929,6 +1040,16 @@ button {
     padding: 0.38rem 0.12rem;
     font-size: 0.66rem;
   }
+
+  .privacy-head {
+    gap: 0.45rem;
+  }
+
+  .info-icon {
+    width: 1.05rem;
+    height: 1.05rem;
+    font-size: 0.72rem;
+  }
 }
 
 @media print {
@@ -949,6 +1070,9 @@ button {
   #tab-solution,
   #tab-history,
   .help-panel,
+  .privacy-notice,
+  .retention-status,
+  .app-footer-note,
   .copy-btn,
   .secondary-btn,
   .primary-btn,

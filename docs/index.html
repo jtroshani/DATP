@@ -175,6 +175,28 @@
               </div>
             </details>
 
+            <section class="privacy-notice" aria-label="Privacy and data retention disclaimer">
+              <div class="privacy-head">
+                <span class="info-icon" aria-hidden="true">i</span>
+                <div>
+                  <p class="privacy-title">Privacy &amp; Data Retention (Disclaimer)</p>
+                  <p class="privacy-text">
+                    "This tool does not save your content. Everything you enter and generate is stored temporarily in this session only and is automatically deleted every 15 minutes. Export your Solution Pack to keep a copy."
+                  </p>
+                </div>
+              </div>
+              <details class="privacy-learn-more">
+                <summary>Learn more</summary>
+                <ul>
+                  <li>No server storage</li>
+                  <li>Session-only version history</li>
+                  <li>Automatic deletion every 15 minutes</li>
+                  <li>Export required to keep results</li>
+                </ul>
+              </details>
+            </section>
+            <p id="retentionStatus" class="retention-status" aria-live="polite"></p>
+
             <div class="actions-row">
               <button class="primary-btn" type="submit">Generate Solution Pack</button>
               <p id="generationStatus" aria-live="polite"></p>
@@ -331,6 +353,11 @@
           <ul id="versionList" class="version-list"></ul>
         </section>
       </main>
+
+      <footer class="app-footer-note" aria-label="Privacy note">
+        <span class="info-icon" aria-hidden="true">i</span>
+        <p>Privacy &amp; Data Retention: Session-only data is automatically deleted every 15 minutes. Export to keep a copy.</p>
+      </footer>
 
       <aside class="help-panel" aria-label="Need help">
         <h2>Need help?</h2>

@@ -1,4 +1,7 @@
-const STORAGE_KEY = "cunySolutionPackHistory";
+const STORAGE_KEY = "cunySolutionPackHistorySession";
+const RETENTION_EXPIRY_KEY = "cunySessionRetentionExpiry";
+const RETENTION_MS = 15 * 60 * 1000;
+const RETENTION_WARNING_MS = 60 * 1000;
 
 const tabs = document.querySelectorAll(".tab-btn");
 const panels = {
@@ -16,6 +19,7 @@ const solutionMetaEl = document.getElementById("solutionMeta");
 const versionListEl = document.getElementById("versionList");
 const timelineVisualEl = document.getElementById("timelineVisual");
 const matrixBodyEl = document.getElementById("matrixBody");
+const retentionStatusEl = document.getElementById("retentionStatus");
 const exportPreviewMetaEl = document.getElementById("exportPreviewMeta");
 const exportPreviewEl = document.getElementById("exportPreview");
 const aiModeEl = document.getElementById("aiMode");
@@ -43,10 +47,14 @@ const sectionEls = {
 const state = {
   currentPack: null,
   versions: loadVersions(),
+  retentionExpiresAt: loadRetentionExpiry(),
+  retentionWarningTimer: null,
+  retentionCleanupTimer: null,
+  retentionWarningShown: false,
   aiConfig: {
     mode: "local",
     model: "local-heuristic-v2",
-    endpoint: "https://openrouter.ai/api/v1/chat/completions",
+    endpoint: "",
     apiKey: "",
   },
 };
@@ -64,13 +72,32 @@ function init() {
   syncAIControls(true);
   attachEventHandlers();
   setActiveTab("intake");
-  renderExportPreview(null);
+  if (state.versions.length > 0) {
+    state.currentPack = state.versions[0];
+    renderSolutionPack(state.currentPack);
+  } else {
+    resetSolutionPackDisplays();
+    renderExportPreview(null);
+  }
+  initializeRetentionLifecycle();
   renderVersionHistory();
 }
 
 function attachEventHandlers() {
   tabs.forEach((tab) => {
     tab.addEventListener("click", () => setActiveTab(tab.dataset.tab));
+  });
+
+  intakeForm.addEventListener("input", () => {
+    if (hasAnySessionData()) {
+      ensureRetentionWindowActive();
+    }
+  });
+
+  intakeForm.addEventListener("change", () => {
+    if (hasAnySessionData()) {
+      ensureRetentionWindowActive();
+    }
   });
 
   intakeForm.addEventListener("submit", async (event) => {
@@ -141,7 +168,17 @@ function attachEventHandlers() {
     state.versions = [];
     persistVersions();
     renderVersionHistory();
+    ensureRetentionWindowActive();
     generationStatusEl.textContent = "Version history cleared.";
+  });
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") return;
+    if (state.retentionExpiresAt && Date.now() >= state.retentionExpiresAt) {
+      clearSessionData("Session data expired and has been deleted.");
+      return;
+    }
+    refreshRetentionTimers();
   });
 
   if (aiModeEl) {
@@ -192,6 +229,7 @@ function attachEventHandlers() {
       applyIntakeSuggestions(suggestions);
       const refreshedIntake = getIntakeData();
       renderFollowUps(buildFollowUpQuestions(refreshedIntake));
+      if (hasAnySessionData()) ensureRetentionWindowActive();
       if (aiAssistStatusEl) aiAssistStatusEl.textContent = suggestions.summary;
     });
   }
@@ -218,11 +256,12 @@ function getSelectedComplexity() {
 }
 
 function getAIConfig() {
-  const mode = normalize(aiModeEl?.value) || "local";
-  const model = normalize(aiModelEl?.value) || (mode === "cloud" ? SIMPLE_AI_DEFAULTS.cloudModel : SIMPLE_AI_DEFAULTS.localModel);
-  const endpoint = normalize(aiEndpointEl?.value) || SIMPLE_AI_DEFAULTS.cloudEndpoint;
-  const apiKey = normalize(aiApiKeyEl?.value);
-  return { mode, model, endpoint, apiKey };
+  return {
+    mode: "local",
+    model: SIMPLE_AI_DEFAULTS.localModel,
+    endpoint: "",
+    apiKey: "",
+  };
 }
 
 function syncAIControls(applyDefaults = false) {
@@ -1188,7 +1227,7 @@ function getAIProviderLabel(endpoint) {
 }
 
 function isCloudMode(aiConfig) {
-  return normalize(aiConfig?.mode) === "cloud";
+  return false;
 }
 
 function isLocalEndpoint(endpoint) {
@@ -1618,12 +1657,20 @@ async function copyText(text) {
 function savePackVersion(pack) {
   state.versions.unshift(pack);
   state.versions = state.versions.slice(0, 25);
+  startRetentionWindow(true);
   persistVersions();
 }
 
 function loadVersions() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const expiresAt = loadRetentionExpiry();
+    if (expiresAt && Date.now() >= expiresAt) {
+      sessionStorage.removeItem(STORAGE_KEY);
+      sessionStorage.removeItem(RETENTION_EXPIRY_KEY);
+      return [];
+    }
+
+    const raw = sessionStorage.getItem(STORAGE_KEY);
     const parsed = raw ? JSON.parse(raw) : [];
     return Array.isArray(parsed) ? parsed : [];
   } catch {
@@ -1633,10 +1680,193 @@ function loadVersions() {
 
 function persistVersions() {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state.versions));
+    if (state.versions.length === 0) {
+      sessionStorage.removeItem(STORAGE_KEY);
+    } else {
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state.versions));
+    }
+    persistRetentionExpiry();
   } catch {
     generationStatusEl.textContent = "Could not save history in this browser session.";
   }
+}
+
+function loadRetentionExpiry() {
+  try {
+    const raw = sessionStorage.getItem(RETENTION_EXPIRY_KEY);
+    const expiresAt = Number(raw);
+    return Number.isFinite(expiresAt) && expiresAt > 0 ? expiresAt : null;
+  } catch {
+    return null;
+  }
+}
+
+function persistRetentionExpiry() {
+  try {
+    if (state.retentionExpiresAt) {
+      sessionStorage.setItem(RETENTION_EXPIRY_KEY, String(state.retentionExpiresAt));
+    } else {
+      sessionStorage.removeItem(RETENTION_EXPIRY_KEY);
+    }
+  } catch {
+    // Ignore storage failures; in-memory session still works.
+  }
+}
+
+function initializeRetentionLifecycle() {
+  if (state.retentionExpiresAt && Date.now() >= state.retentionExpiresAt) {
+    clearSessionData("Session data expired and has been deleted.");
+    return;
+  }
+  if (!hasAnySessionData()) {
+    state.retentionExpiresAt = null;
+    state.retentionWarningShown = false;
+    persistRetentionExpiry();
+    refreshRetentionTimers();
+    return;
+  }
+  if (!state.retentionExpiresAt && hasAnySessionData()) {
+    startRetentionWindow(false);
+    return;
+  }
+  refreshRetentionTimers();
+}
+
+function hasAnyIntakeData() {
+  if (!intakeForm) return false;
+  const intake = getIntakeData();
+  const hasConstraint = Object.values(intake.constraints || {}).some((value) => Boolean(normalize(value)));
+
+  return Boolean(
+    intake.projectTitle ||
+    intake.projectGoal ||
+    intake.ownerName ||
+    intake.ownerArea ||
+    intake.problem ||
+    intake.outcomes.length ||
+    hasConstraint ||
+    intake.goLiveDate ||
+    intake.stakeholders.length ||
+    intake.systems.length ||
+    intake.risks.length ||
+    (intake.urgency && intake.urgency !== "Moderate")
+  );
+}
+
+function hasAnySessionData() {
+  return hasAnyIntakeData() || Boolean(state.currentPack) || state.versions.length > 0;
+}
+
+function ensureRetentionWindowActive() {
+  if (!hasAnySessionData()) {
+    state.retentionExpiresAt = null;
+    state.retentionWarningShown = false;
+    persistRetentionExpiry();
+    refreshRetentionTimers();
+    return;
+  }
+  if (!state.retentionExpiresAt) {
+    startRetentionWindow(false);
+    return;
+  }
+  refreshRetentionTimers();
+}
+
+function startRetentionWindow(reset = false) {
+  if (!hasAnySessionData()) return;
+  if (!state.retentionExpiresAt || reset) {
+    state.retentionExpiresAt = Date.now() + RETENTION_MS;
+    state.retentionWarningShown = false;
+    persistRetentionExpiry();
+  }
+  refreshRetentionTimers();
+}
+
+function clearRetentionTimers() {
+  if (state.retentionWarningTimer) {
+    window.clearTimeout(state.retentionWarningTimer);
+    state.retentionWarningTimer = null;
+  }
+  if (state.retentionCleanupTimer) {
+    window.clearTimeout(state.retentionCleanupTimer);
+    state.retentionCleanupTimer = null;
+  }
+}
+
+function refreshRetentionTimers() {
+  clearRetentionTimers();
+
+  if (!state.retentionExpiresAt || !hasAnySessionData()) {
+    if (retentionStatusEl) retentionStatusEl.textContent = "";
+    return;
+  }
+
+  const now = Date.now();
+  if (now >= state.retentionExpiresAt) {
+    clearSessionData("Session data expired and has been deleted.");
+    return;
+  }
+
+  if (retentionStatusEl) {
+    retentionStatusEl.textContent = `Session data auto-deletes at ${formatDateTime(state.retentionExpiresAt)}. Export before expiration.`;
+  }
+
+  const warningDelay = Math.max(0, state.retentionExpiresAt - RETENTION_WARNING_MS - now);
+  const cleanupDelay = Math.max(0, state.retentionExpiresAt - now);
+
+  state.retentionWarningTimer = window.setTimeout(() => {
+    if (!hasAnySessionData()) return;
+    if (state.retentionWarningShown) return;
+    if (document.visibilityState === "visible" && retentionStatusEl) {
+      state.retentionWarningShown = true;
+      const warning = "Privacy reminder: Session data will be deleted in about 1 minute. Export now to keep a copy.";
+      retentionStatusEl.textContent = warning;
+      if (generationStatusEl) generationStatusEl.textContent = warning;
+      window.alert(warning);
+    }
+  }, warningDelay);
+
+  state.retentionCleanupTimer = window.setTimeout(() => {
+    clearSessionData("Session data expired and has been deleted.");
+  }, cleanupDelay);
+}
+
+function clearSessionData(statusMessage = "Session data cleared.") {
+  clearRetentionTimers();
+  state.retentionExpiresAt = null;
+  state.retentionWarningShown = false;
+  persistRetentionExpiry();
+
+  state.currentPack = null;
+  state.versions = [];
+  persistVersions();
+
+  if (intakeForm) intakeForm.reset();
+  const defaultComplexity = document.querySelector('input[name="complexity"][value="Standard"]');
+  if (defaultComplexity) defaultComplexity.checked = true;
+
+  followupListEl.innerHTML = "";
+  followupQuestionsEl.classList.add("hidden");
+  if (aiAssistStatusEl) aiAssistStatusEl.textContent = "";
+
+  resetSolutionPackDisplays();
+  renderExportPreview(null);
+  renderVersionHistory();
+
+  if (generationStatusEl) generationStatusEl.textContent = statusMessage;
+  if (retentionStatusEl) retentionStatusEl.textContent = "Session cache cleared for privacy.";
+}
+
+function resetSolutionPackDisplays() {
+  solutionMetaEl.textContent = "";
+  timelineVisualEl.innerHTML = '<li class="timeline-node timeline-empty">Generate a solution pack from Intake to view the timeline.</li>';
+  matrixBodyEl.innerHTML = "<tr><td colspan=\"5\">Generate a solution pack from Intake to view the tracker matrix.</td></tr>";
+
+  Object.values(sectionEls).forEach((el) => {
+    if (el) {
+      el.textContent = "Generate a solution pack from Intake to view this section.";
+    }
+  });
 }
 
 function renderVersionHistory() {
@@ -1672,6 +1902,7 @@ function renderVersionHistory() {
       state.currentPack = version;
       renderSolutionPack(version);
       setActiveTab("solution");
+      ensureRetentionWindowActive();
       generationStatusEl.textContent = "Selected version loaded.";
     });
 
@@ -1692,6 +1923,7 @@ function renderVersionHistory() {
       state.versions = state.versions.filter((item) => item.id !== version.id);
       persistVersions();
       renderVersionHistory();
+      ensureRetentionWindowActive();
       generationStatusEl.textContent = "Version removed.";
     });
 
