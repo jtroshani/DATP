@@ -18,6 +18,7 @@ const generationStatusEl = document.getElementById("generationStatus");
 const solutionMetaEl = document.getElementById("solutionMeta");
 const versionListEl = document.getElementById("versionList");
 const timelineVisualEl = document.getElementById("timelineVisual");
+const timelineMetricsEl = document.getElementById("timelineMetrics");
 const matrixBodyEl = document.getElementById("matrixBody");
 const retentionStatusEl = document.getElementById("retentionStatus");
 const exportPreviewMetaEl = document.getElementById("exportPreviewMeta");
@@ -553,6 +554,8 @@ function buildTimelineData(context) {
     milestone: milestone.milestone,
     window: milestone.windowLabel,
     targetDate: milestone.targetLabel,
+    startISO: milestone.startISO || "",
+    targetISO: milestone.targetISO || "",
   }));
 }
 
@@ -1296,6 +1299,7 @@ function getMatrixData(pack, timeline) {
 
 function renderTimeline(timeline) {
   timelineVisualEl.innerHTML = "";
+  renderTimelineMetrics(timeline);
 
   if (!timeline.length) {
     const emptyNode = document.createElement("li");
@@ -1306,6 +1310,7 @@ function renderTimeline(timeline) {
   }
 
   timeline.forEach((item, index) => {
+    const phaseStatus = getPhaseProgressStatus(item, index, timeline);
     const node = document.createElement("li");
     node.className = "timeline-node";
 
@@ -1322,6 +1327,10 @@ function renderTimeline(timeline) {
     const stageLabel = item.stage ? `${item.stage} | ` : "";
     detail.textContent = `${stageLabel}${item.window || item.phase || ""}`;
 
+    const status = document.createElement("span");
+    status.className = `phase-status ${getPhaseStatusClass(phaseStatus)}`;
+    status.textContent = `${getPhaseStatusIcon(phaseStatus)} ${phaseStatus}`;
+
     const date = document.createElement("span");
     date.className = "timeline-date";
     date.textContent = item.targetDate || "TBD";
@@ -1329,8 +1338,35 @@ function renderTimeline(timeline) {
     node.appendChild(phase);
     node.appendChild(title);
     node.appendChild(detail);
+    node.appendChild(status);
     node.appendChild(date);
     timelineVisualEl.appendChild(node);
+  });
+}
+
+function renderTimelineMetrics(timeline) {
+  if (!timelineMetricsEl) return;
+  timelineMetricsEl.innerHTML = "";
+
+  if (!timeline.length) return;
+
+  const counts = { Complete: 0, "In Progress": 0, Upcoming: 0 };
+  timeline.forEach((item, index) => {
+    const status = getPhaseProgressStatus(item, index, timeline);
+    counts[status] = (counts[status] || 0) + 1;
+  });
+
+  const chips = [
+    { label: "Complete", count: counts.Complete, className: "metric-complete", icon: "✓" },
+    { label: "In Progress", count: counts["In Progress"], className: "metric-progress", icon: "◔" },
+    { label: "Upcoming", count: counts.Upcoming, className: "metric-upcoming", icon: "○" },
+  ];
+
+  chips.forEach((chip) => {
+    const item = document.createElement("div");
+    item.className = `metric-chip ${chip.className}`;
+    item.innerHTML = `<span class="metric-icon">${chip.icon}</span><span>${chip.label}: ${chip.count}</span>`;
+    timelineMetricsEl.appendChild(item);
   });
 }
 
@@ -1380,7 +1416,10 @@ function renderMatrix(matrixRows) {
 function renderTimelineText(timeline) {
   if (!timeline.length) return "- No milestones available.";
   return timeline
-    .map((item, index) => `- Phase ${item.phaseNumber || index + 1} [${item.stage || "Execution"}]: ${item.milestone || "Milestone"} | ${item.phase || "Phase"} | Window ${item.window || "TBD"} | Target ${item.targetDate || "TBD"}`)
+    .map((item, index) => {
+      const status = getPhaseProgressStatus(item, index, timeline);
+      return `- Phase ${item.phaseNumber || index + 1} [${item.stage || "Execution"} | ${status}]: ${item.milestone || "Milestone"} | ${item.phase || "Phase"} | Window ${item.window || "TBD"} | Target ${item.targetDate || "TBD"}`;
+    })
     .join("\n");
 }
 
@@ -1414,6 +1453,8 @@ function normalizeMilestones(milestones = []) {
       milestone: item.milestone || item.phase || "Milestone",
       windowLabel: item.windowLabel || item.window || "Window pending",
       targetLabel: item.targetLabel || item.targetDate || "TBD",
+      startISO: item.startISO || "",
+      targetISO: item.targetISO || "",
     };
   });
 }
@@ -1428,6 +1469,39 @@ function getStatusClass(status) {
   if (normalized === "at risk") return "status-at-risk";
   if (normalized === "complete") return "status-complete";
   return "status-not-started";
+}
+
+function getPhaseProgressStatus(item, index, timeline) {
+  const now = startOfDay(new Date());
+  const target = parseFlexibleDate(item.targetISO || item.targetDate);
+  const prevTarget = index > 0
+    ? parseFlexibleDate(timeline[index - 1]?.targetISO || timeline[index - 1]?.targetDate)
+    : null;
+
+  if (target && now > target) return "Complete";
+  if (index === 0) return "In Progress";
+  if (prevTarget && now >= prevTarget && (!target || now <= target)) return "In Progress";
+  return "Upcoming";
+}
+
+function getPhaseStatusClass(status) {
+  if (status === "Complete") return "phase-complete";
+  if (status === "In Progress") return "phase-progress";
+  return "phase-upcoming";
+}
+
+function getPhaseStatusIcon(status) {
+  if (status === "Complete") return "✓";
+  if (status === "In Progress") return "◔";
+  return "○";
+}
+
+function parseFlexibleDate(value) {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  parsed.setHours(0, 0, 0, 0);
+  return parsed;
 }
 
 function getAISectionText(pack) {
@@ -1860,6 +1934,7 @@ function clearSessionData(statusMessage = "Session data cleared.") {
 function resetSolutionPackDisplays() {
   solutionMetaEl.textContent = "";
   timelineVisualEl.innerHTML = '<li class="timeline-node timeline-empty">Generate a solution pack from Intake to view the timeline.</li>';
+  if (timelineMetricsEl) timelineMetricsEl.innerHTML = "";
   matrixBodyEl.innerHTML = "<tr><td colspan=\"5\">Generate a solution pack from Intake to view the tracker matrix.</td></tr>";
 
   Object.values(sectionEls).forEach((el) => {

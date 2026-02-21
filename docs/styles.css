@@ -539,50 +539,86 @@ button {
 }
 
 .visual-helper {
-  margin: 0.75rem 0 0;
+  margin: 0.62rem 0 0;
   padding: 0 0.85rem;
   color: var(--neutral-700);
+}
+
+.phase-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.45rem;
+  margin: 0.56rem 0.78rem 0.2rem;
+}
+
+.metric-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  border: 1px solid #ccdded;
+  background: #f7fbff;
+  color: #284a6f;
+  font-size: 0.77rem;
+  font-weight: 700;
+  line-height: 1;
+  min-height: 1.65rem;
+  padding: 0.2rem 0.42rem;
+  text-align: center;
+}
+
+.metric-icon {
+  font-size: 0.8rem;
+}
+
+.metric-complete {
+  background: #edf8f1;
+  border-color: #b7dec7;
+  color: #22603f;
+}
+
+.metric-progress {
+  background: #edf5ff;
+  border-color: #bfd8f2;
+  color: #1d558e;
+}
+
+.metric-upcoming {
+  background: #f2f6fb;
+  border-color: #d0ddec;
+  color: #425a73;
 }
 
 .timeline-rail {
   list-style: none;
   margin: 0;
-  padding: 0.85rem;
-  display: flex;
-  gap: 0.8rem;
-  overflow-x: auto;
+  padding: 0.64rem 0.74rem 0.78rem;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.5rem;
+  overflow: visible;
 }
 
 .timeline-node {
-  min-width: 210px;
-  background: #f8fbff;
+  min-width: 0;
+  background: #f9fcff;
   border: 1px solid #c9dced;
   border-radius: 12px;
-  padding: 0.7rem;
-  position: relative;
-}
-
-.timeline-node::after {
-  content: "";
-  position: absolute;
-  top: 50%;
-  right: -0.8rem;
-  width: 0.8rem;
-  height: 2px;
-  background: #8bb2d5;
-}
-
-.timeline-node:last-child::after {
-  display: none;
+  padding: 0.55rem 0.56rem;
+  display: grid;
+  gap: 0.26rem;
+  align-content: start;
+  border-top: 3px solid #b9cfe5;
 }
 
 .timeline-phase {
   display: block;
-  font-size: 0.78rem;
+  font-size: 0.69rem;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   color: #3f6388;
-  margin-bottom: 0.3rem;
+  margin-bottom: 0.02rem;
   font-weight: 700;
 }
 
@@ -590,27 +626,68 @@ button {
   display: block;
   color: #173352;
   font-weight: 700;
+  font-size: 0.85rem;
+  line-height: 1.2;
 }
 
 .timeline-detail {
   display: block;
-  margin-top: 0.2rem;
+  margin-top: 0.03rem;
   color: #35597f;
-  font-size: 0.86rem;
+  font-size: 0.74rem;
+  line-height: 1.25;
+  min-height: 2.25em;
+}
+
+.phase-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.24rem;
+  width: fit-content;
+  min-width: 82px;
+  max-width: 100%;
+  min-height: 1.34rem;
+  border-radius: 999px;
+  padding: 0.1rem 0.45rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.phase-complete {
+  background: #eaf7ef;
+  border: 1px solid #bbdfc9;
+  color: #235f3f;
+}
+
+.phase-progress {
+  background: #eaf3ff;
+  border: 1px solid #bfd7f1;
+  color: #1d568d;
+}
+
+.phase-upcoming {
+  background: #f1f5fa;
+  border: 1px solid #d2deec;
+  color: #455c74;
 }
 
 .timeline-date {
   display: inline-block;
-  margin-top: 0.45rem;
-  font-size: 0.84rem;
+  margin-top: 0.1rem;
+  font-size: 0.72rem;
+  font-weight: 700;
   color: #234a71;
   background: #e8f1fb;
   border-radius: 999px;
-  padding: 0.18rem 0.55rem;
+  padding: 0.15rem 0.46rem;
+  width: fit-content;
 }
 
 .timeline-empty {
   color: var(--neutral-700);
+  grid-column: 1 / -1;
 }
 
 .matrix-wrap {
@@ -649,6 +726,8 @@ button {
   padding: 0.15rem 0.5rem;
   font-size: 0.78rem;
   font-weight: 700;
+  min-width: 94px;
+  text-align: center;
 }
 
 .status-not-started {
@@ -868,17 +947,13 @@ button {
   }
 
   .timeline-rail {
-    display: grid;
-    grid-template-columns: 1fr;
-    overflow-x: visible;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.42rem;
+    padding: 0.56rem 0.62rem 0.66rem;
   }
 
   .timeline-node {
-    min-width: 0;
-  }
-
-  .timeline-node::after {
-    display: none;
+    padding: 0.5rem 0.5rem;
   }
 
   .help-panel {
@@ -966,6 +1041,38 @@ button {
     padding: 0.45rem 0.34rem;
     font-size: 0.8rem;
     letter-spacing: 0;
+  }
+
+  .phase-metrics {
+    margin: 0.5rem 0.62rem 0.18rem;
+    gap: 0.34rem;
+  }
+
+  .metric-chip {
+    font-size: 0.72rem;
+    min-height: 1.55rem;
+    padding: 0.18rem 0.34rem;
+  }
+
+  .timeline-rail {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .timeline-title {
+    font-size: 0.8rem;
+  }
+
+  .timeline-detail {
+    font-size: 0.72rem;
+    min-height: 2.1em;
+  }
+
+  .phase-status {
+    font-size: 0.68rem;
+  }
+
+  .timeline-date {
+    font-size: 0.7rem;
   }
 
   .export-toolbar {
@@ -1065,6 +1172,16 @@ button {
   .tab-panel {
     padding: 0.9rem;
   }
+
+  .timeline-rail {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.35rem;
+    padding: 0.52rem 0.52rem 0.58rem;
+  }
+
+  .phase-metrics {
+    margin: 0.42rem 0.52rem 0.16rem;
+  }
 }
 
 @media (max-width: 420px) {
@@ -1087,6 +1204,42 @@ button {
 
   .tab-btn {
     padding: 0.38rem 0.12rem;
+    font-size: 0.66rem;
+  }
+
+  .metric-chip {
+    font-size: 0.66rem;
+    min-height: 1.46rem;
+    gap: 0.24rem;
+  }
+
+  .metric-icon {
+    font-size: 0.7rem;
+  }
+
+  .timeline-rail {
+    gap: 0.3rem;
+    padding: 0.48rem;
+  }
+
+  .timeline-node {
+    padding: 0.46rem;
+  }
+
+  .timeline-title {
+    font-size: 0.76rem;
+  }
+
+  .timeline-detail {
+    font-size: 0.69rem;
+  }
+
+  .phase-status {
+    font-size: 0.64rem;
+    padding: 0.1rem 0.35rem;
+  }
+
+  .timeline-date {
     font-size: 0.66rem;
   }
 
