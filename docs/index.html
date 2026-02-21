@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Project Management Solutions Builder</title>
-    <link rel="stylesheet" href="styles.css?v=20260221j" />
+    <link rel="stylesheet" href="styles.css?v=20260221m" />
   </head>
   <body>
     <div class="app-shell">
@@ -299,6 +299,12 @@
                   <ul id="effortLegend" class="chart-legend"></ul>
                 </div>
               </div>
+              <div class="chart-card">
+                <h4>Milestone burnup (planned vs current)</h4>
+                <div id="milestoneBurnupChart" class="chart-block" aria-label="Line chart of planned versus current cumulative completion by phase">
+                  <p class="chart-empty">Generate a solution pack to view burnup progress.</p>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -401,8 +407,19 @@
           <a href="mailto:jetmir.troshani@cuny.edu">jetmir.troshani@cuny.edu</a>
         </p>
       </aside>
+
+      <div class="generation-loader" id="generationLoader" role="status" aria-live="polite" aria-hidden="true">
+        <div class="loader-card">
+          <div class="loader-ring" aria-hidden="true"></div>
+          <h3>Generating your Solution Pack</h3>
+          <p>Preparing timeline, governance, deliverables, and next steps.</p>
+          <div class="loader-progress">
+            <span class="loader-progress-fill" id="loaderProgressFill"></span>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <script src="app.js?v=20260221j"></script>
+    <script src="app.js?v=20260221m"></script>
   </body>
 </html>

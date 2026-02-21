@@ -37,6 +37,7 @@ const miniMetricsEl = document.getElementById("miniMetrics");
 const phaseDurationChartEl = document.getElementById("phaseDurationChart");
 const effortDonutEl = document.getElementById("effortDonut");
 const effortLegendEl = document.getElementById("effortLegend");
+const milestoneBurnupChartEl = document.getElementById("milestoneBurnupChart");
 const workstreamsListEl = document.getElementById("workstreamsList");
 const copyWorkstreamsEl = document.getElementById("copyWorkstreams");
 const raidSnapshotListEl = document.getElementById("raidSnapshotList");
@@ -57,6 +58,8 @@ const aiModeHintEl = document.getElementById("aiModeHint");
 const aiTestConnectionEl = document.getElementById("aiTestConnection");
 const aiSuggestIntakeEl = document.getElementById("aiSuggestIntake");
 const aiAssistStatusEl = document.getElementById("aiAssistStatus");
+const generationLoaderEl = document.getElementById("generationLoader");
+const loaderProgressFillEl = document.getElementById("loaderProgressFill");
 
 const sectionEls = {
   sectionA: document.getElementById("sectionA"),
@@ -76,6 +79,7 @@ const state = {
   retentionWarningTimer: null,
   retentionCleanupTimer: null,
   retentionWarningShown: false,
+  isGenerating: false,
   aiConfig: {
     mode: "local",
     model: "local-heuristic-v2",
@@ -319,6 +323,8 @@ function attachEventHandlers() {
 
   intakeForm.addEventListener("submit", async (event) => {
     event.preventDefault();
+    if (state.isGenerating) return;
+
     state.aiConfig = getAIConfig();
     const intake = getIntakeData();
     const complexity = getSelectedComplexity();
@@ -326,16 +332,36 @@ function attachEventHandlers() {
 
     renderFollowUps(followups);
     generationStatusEl.textContent = "Generating solution pack...";
-    let pack = buildSolutionPack(intake, complexity, followups, state.aiConfig);
-    pack = await enhancePackWithAI(pack, intake, followups, state.aiConfig);
-    state.currentPack = pack;
-    renderSolutionPack(pack);
-    savePackVersion(pack);
-    renderVersionHistory();
-    setActiveTab("solution");
-    generationStatusEl.textContent = pack.aiMeta?.mode !== "local"
-      ? `Solution pack generated with ${pack.aiMeta?.provider || "AI"} enhancements and saved to version history.`
-      : "Solution pack generated and saved to version history.";
+    state.isGenerating = true;
+    startGenerationLoader();
+    const minimumDelay = waitMs(5000);
+    let generatedPack = null;
+
+    try {
+      let pack = buildSolutionPack(intake, complexity, followups, state.aiConfig);
+      pack = await enhancePackWithAI(pack, intake, followups, state.aiConfig);
+      await minimumDelay;
+
+      state.currentPack = pack;
+      renderSolutionPack(pack);
+      savePackVersion(pack);
+      renderVersionHistory();
+      generatedPack = pack;
+    } catch {
+      await minimumDelay;
+      generationStatusEl.textContent = "Could not generate the solution pack. Please try again.";
+    } finally {
+      stopGenerationLoader();
+      state.isGenerating = false;
+    }
+
+    if (generatedPack) {
+      setActiveTab("solution");
+      scrollToSolutionPackTop();
+      generationStatusEl.textContent = generatedPack.aiMeta?.mode !== "local"
+        ? `Solution pack generated with ${generatedPack.aiMeta?.provider || "AI"} enhancements and saved to version history.`
+        : "Solution pack generated and saved to version history.";
+    }
   });
 
   const loadSampleDataEl = document.getElementById("loadSampleData");
@@ -539,9 +565,47 @@ function setActiveTab(key) {
   });
 }
 
+function scrollToSolutionPackTop() {
+  if (!panels.solution) return;
+  window.requestAnimationFrame(() => {
+    const targetTop = panels.solution.getBoundingClientRect().top + window.scrollY;
+    window.scrollTo({ top: Math.max(0, targetTop - 6), left: 0, behavior: "auto" });
+  });
+}
+
 function getActiveTabKey() {
   const activeTab = document.querySelector(".tab-btn.active");
   return normalize(activeTab?.dataset?.tab) || "intake";
+}
+
+function waitMs(ms) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+function startGenerationLoader() {
+  if (!generationLoaderEl) return;
+  generationLoaderEl.classList.add("active");
+  generationLoaderEl.setAttribute("aria-hidden", "false");
+  document.body.classList.add("is-loading-solution");
+
+  if (loaderProgressFillEl) {
+    loaderProgressFillEl.classList.remove("animate");
+    void loaderProgressFillEl.offsetWidth;
+    loaderProgressFillEl.classList.add("animate");
+  }
+}
+
+function stopGenerationLoader() {
+  if (loaderProgressFillEl) {
+    loaderProgressFillEl.classList.remove("animate");
+  }
+  if (generationLoaderEl) {
+    generationLoaderEl.classList.remove("active");
+    generationLoaderEl.setAttribute("aria-hidden", "true");
+  }
+  document.body.classList.remove("is-loading-solution");
 }
 
 function exportSolutionPackPdf() {
@@ -2062,6 +2126,7 @@ function daysUntilDate(dateValue) {
 function renderOutcomeCharts(pack, timeline, matrixRows) {
   renderPhaseDurationChart(timeline);
   renderEffortAllocationChart(pack, timeline, matrixRows);
+  renderMilestoneBurnupChart(timeline);
 }
 
 function renderPhaseDurationChart(timeline) {
@@ -2133,6 +2198,97 @@ function renderEffortAllocationChart(pack, timeline, matrixRows) {
   const workstreams = new Set((matrixRows || []).map((row) => normalize(row.owner))).size;
   effortDonutEl.innerHTML = `<span>${workstreams || 0} owners</span>`;
   effortLegendEl.innerHTML = legendItems.join("");
+}
+
+function renderMilestoneBurnupChart(timeline) {
+  if (!milestoneBurnupChartEl) return;
+
+  if (!timeline.length) {
+    milestoneBurnupChartEl.innerHTML = '<p class="chart-empty">Generate a solution pack to view burnup progress.</p>';
+    return;
+  }
+
+  const phaseRows = timeline.map((item, index) => ({
+    label: normalizePhaseLabel(item.phase || item.stage || `Phase ${index + 1}`),
+    durationDays: estimatePhaseDurationDays(item, index, timeline),
+    status: getPhaseProgressStatus(item, index, timeline),
+  }));
+
+  const totalDays = phaseRows.reduce((sum, row) => sum + row.durationDays, 0) || 1;
+  let plannedCumulative = 0;
+  let actualCumulative = 0;
+
+  const points = phaseRows.map((row) => {
+    const phaseWeight = row.durationDays / totalDays;
+    plannedCumulative += phaseWeight * 100;
+    const completionFactor = row.status === "Complete"
+      ? 1
+      : row.status === "In Progress"
+        ? 0.55
+        : 0;
+    actualCumulative += phaseWeight * 100 * completionFactor;
+
+    return {
+      label: row.label,
+      planned: Math.max(0, Math.min(100, plannedCumulative)),
+      actual: Math.max(0, Math.min(100, actualCumulative)),
+    };
+  });
+
+  const width = 460;
+  const height = 210;
+  const margin = { top: 14, right: 16, bottom: 46, left: 36 };
+  const plotWidth = width - margin.left - margin.right;
+  const plotHeight = height - margin.top - margin.bottom;
+  const denominator = Math.max(points.length - 1, 1);
+  const xFor = (index) => margin.left + (index / denominator) * plotWidth;
+  const yFor = (value) => margin.top + ((100 - value) / 100) * plotHeight;
+
+  const plannedPath = points
+    .map((point, index) => `${index === 0 ? "M" : "L"} ${xFor(index).toFixed(2)} ${yFor(point.planned).toFixed(2)}`)
+    .join(" ");
+
+  const actualPath = points
+    .map((point, index) => `${index === 0 ? "M" : "L"} ${xFor(index).toFixed(2)} ${yFor(point.actual).toFixed(2)}`)
+    .join(" ");
+
+  const yTicks = [0, 25, 50, 75, 100];
+  const yGrid = yTicks.map((tick) => `
+    <line x1="${margin.left}" y1="${yFor(tick).toFixed(2)}" x2="${width - margin.right}" y2="${yFor(tick).toFixed(2)}" />
+    <text x="${(margin.left - 6).toFixed(2)}" y="${(yFor(tick) + 3).toFixed(2)}" text-anchor="end">${tick}%</text>
+  `).join("");
+
+  const xLabels = points.map((point, index) => `
+    <text x="${xFor(index).toFixed(2)}" y="${(height - 16).toFixed(2)}" text-anchor="middle">${point.label}</text>
+  `).join("");
+
+  const plannedDots = points.map((point, index) => `
+    <circle cx="${xFor(index).toFixed(2)}" cy="${yFor(point.planned).toFixed(2)}" r="3.2" class="burnup-dot planned" />
+  `).join("");
+
+  const actualDots = points.map((point, index) => `
+    <circle cx="${xFor(index).toFixed(2)}" cy="${yFor(point.actual).toFixed(2)}" r="3.2" class="burnup-dot actual" />
+  `).join("");
+
+  const lastPoint = points[points.length - 1];
+  const summaryText = `Planned ${Math.round(lastPoint.planned)}% | Current ${Math.round(lastPoint.actual)}%`;
+
+  milestoneBurnupChartEl.innerHTML = `
+    <div class="burnup-chart">
+      <svg class="burnup-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="Burnup chart with planned and current cumulative completion by phase">
+        <g class="burnup-grid">${yGrid}</g>
+        <g class="burnup-xlabels">${xLabels}</g>
+        <path d="${plannedPath}" class="burnup-line planned" />
+        <path d="${actualPath}" class="burnup-line actual" />
+        <g>${plannedDots}${actualDots}</g>
+      </svg>
+      <div class="burnup-legend">
+        <span><i class="legend-line planned"></i>Planned cumulative</span>
+        <span><i class="legend-line actual"></i>Current cumulative</span>
+        <span class="burnup-summary">${summaryText}</span>
+      </div>
+    </div>
+  `;
 }
 
 function estimatePhaseDurationDays(item, index, timeline) {
@@ -2777,6 +2933,8 @@ function refreshRetentionTimers() {
 
 function clearSessionData(statusMessage = "Session data cleared.") {
   clearRetentionTimers();
+  stopGenerationLoader();
+  state.isGenerating = false;
   state.retentionExpiresAt = null;
   state.retentionWarningShown = false;
   persistRetentionExpiry();
@@ -2821,6 +2979,7 @@ function resetSolutionPackDisplays() {
     effortDonutEl.innerHTML = "<span>0 owners</span>";
   }
   if (effortLegendEl) effortLegendEl.innerHTML = "";
+  if (milestoneBurnupChartEl) milestoneBurnupChartEl.innerHTML = '<p class="chart-empty">Generate a solution pack to view burnup progress.</p>';
   if (workstreamsListEl) workstreamsListEl.innerHTML = "<li>Generate a solution pack from Intake to view workstreams.</li>";
   if (raidSnapshotListEl) raidSnapshotListEl.innerHTML = "<li>Generate a solution pack from Intake to view the RAID snapshot.</li>";
 
