@@ -516,8 +516,29 @@ button {
 }
 
 @media (max-width: 860px) {
+  .app-shell {
+    padding: 1.25rem 0.85rem 6.5rem;
+  }
+
+  .app-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.85rem;
+  }
+
   .two-col {
     grid-template-columns: 1fr;
+  }
+
+  .complexity-toggle {
+    width: 100%;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    row-gap: 0.55rem;
+  }
+
+  .complexity-toggle .toggle-label {
+    width: 100%;
   }
 
   .timeline-rail {
@@ -535,9 +556,89 @@ button {
   }
 
   .help-panel {
-    left: 1rem;
-    right: 1rem;
+    position: static;
+    margin-top: 1rem;
     max-width: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .app-shell {
+    padding: 1rem 0.75rem 1.1rem;
+  }
+
+  .eyebrow-main {
+    font-size: 0.69rem;
+    letter-spacing: 0.05em;
+  }
+
+  .eyebrow-subtitle {
+    font-size: 0.63rem;
+    line-height: 1.35;
+  }
+
+  h1 {
+    margin-top: 0.3rem;
+    font-size: 1.95rem;
+    line-height: 1.14;
+  }
+
+  .tab-nav {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 0.2rem;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .tab-btn {
+    white-space: nowrap;
+  }
+
+  .complexity-toggle {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    column-gap: 0.25rem;
+    row-gap: 0.5rem;
+    padding: 0.7rem 0.65rem;
+  }
+
+  .complexity-toggle .toggle-label {
+    grid-column: 1 / -1;
+    width: auto;
+  }
+
+  .complexity-toggle label {
+    justify-self: center;
+    font-size: 0.95rem;
+    white-space: nowrap;
+    gap: 0.28rem;
+  }
+
+  .complexity-toggle input[type="radio"] {
+    transform: scale(0.95);
+  }
+
+  .tab-panel {
+    padding: 0.9rem;
+  }
+}
+
+@media (max-width: 420px) {
+  h1 {
+    font-size: 1.7rem;
+  }
+
+  .complexity-toggle {
+    grid-template-columns: 1fr;
+    row-gap: 0.4rem;
+  }
+
+  .complexity-toggle .toggle-label {
+    margin-bottom: 0.1rem;
+  }
+
+  .complexity-toggle label {
+    justify-self: stretch;
   }
 }
 
