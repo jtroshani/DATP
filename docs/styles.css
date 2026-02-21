@@ -150,6 +150,7 @@ label {
   display: grid;
   gap: 0.4rem;
   margin-bottom: 1rem;
+  overflow-wrap: anywhere;
 }
 
 .field-example {
@@ -186,6 +187,66 @@ fieldset {
   border-radius: 12px;
   padding: 0.8rem;
   margin-bottom: 1rem;
+}
+
+.intake-section {
+  border: 1px solid var(--neutral-200);
+  border-radius: 12px;
+  margin-bottom: 0.95rem;
+  background: #fbfdff;
+  overflow: hidden;
+}
+
+.intake-section > summary {
+  list-style: none;
+  cursor: pointer;
+  font-weight: 700;
+  color: #193b5f;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  min-height: 48px;
+  padding: 0.7rem 0.9rem;
+  background: #f5f9ff;
+  overflow-wrap: anywhere;
+}
+
+.intake-section > summary::-webkit-details-marker {
+  display: none;
+}
+
+.intake-section > summary::after {
+  content: "+";
+  flex: 0 0 auto;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 999px;
+  border: 1px solid #9eb8d3;
+  color: #1c4f81;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  line-height: 1;
+  font-weight: 700;
+}
+
+.intake-section[open] > summary::after {
+  content: "\2212";
+}
+
+.intake-section > summary:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--focus) 45%, transparent);
+  outline-offset: -1px;
+}
+
+.intake-section-body {
+  padding: 0.85rem 0.9rem 0.2rem;
+}
+
+.intake-section-body fieldset {
+  margin-top: 0.05rem;
 }
 
 input:focus,
@@ -559,6 +620,68 @@ button {
     position: static;
     margin-top: 1rem;
     max-width: none;
+  }
+}
+
+@media (max-width: 768px) {
+  input,
+  textarea,
+  select,
+  button {
+    font-size: 16px;
+  }
+
+  input,
+  select,
+  textarea {
+    min-height: 48px;
+    padding: 0.82rem 0.88rem;
+  }
+
+  textarea {
+    min-height: 110px;
+  }
+
+  .two-col {
+    grid-template-columns: 1fr;
+  }
+
+  label {
+    margin-bottom: 1.05rem;
+    gap: 0.45rem;
+  }
+
+  .field-example {
+    line-height: 1.38;
+  }
+
+  .intake-section {
+    margin-bottom: 0.85rem;
+  }
+
+  .intake-section > summary {
+    min-height: 56px;
+    padding: 0.9rem 1rem;
+    font-size: 1rem;
+  }
+
+  .intake-section > summary::after {
+    width: 1.7rem;
+    height: 1.7rem;
+    font-size: 1.2rem;
+  }
+
+  .intake-section-body {
+    padding: 0.85rem 0.85rem 0.1rem;
+  }
+
+  .actions-row {
+    gap: 0.6rem;
+  }
+
+  .actions-row .primary-btn,
+  .actions-row .secondary-btn {
+    min-height: 48px;
   }
 }
 

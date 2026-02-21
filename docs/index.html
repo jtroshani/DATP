@@ -34,135 +34,150 @@
       <main>
         <section class="tab-panel active" id="tab-intake" role="tabpanel" tabindex="0" aria-labelledby="tabbtn-intake">
           <form id="intakeForm" novalidate>
-            <div class="grid two-col">
-              <label>
-                Project title
-                <input id="projectTitle" name="projectTitle" type="text" required />
-              </label>
-              <label>
-                One-sentence goal
-                <input id="projectGoal" name="projectGoal" type="text" required />
-              </label>
-            </div>
+            <details class="intake-section" open>
+              <summary>Project basics</summary>
+              <div class="intake-section-body">
+                <div class="grid two-col">
+                  <label>
+                    Project title
+                    <input id="projectTitle" name="projectTitle" type="text" required />
+                  </label>
+                  <label>
+                    One-sentence goal
+                    <input id="projectGoal" name="projectGoal" type="text" required />
+                  </label>
+                </div>
 
-            <div class="grid two-col">
-              <label>
-                Business owner / sponsor (name)
-                <input id="ownerName" name="ownerName" type="text" required />
-              </label>
-              <label>
-                Business area
-                <input id="ownerArea" name="ownerArea" type="text" required />
-              </label>
-            </div>
+                <div class="grid two-col">
+                  <label>
+                    Business owner / sponsor (name)
+                    <input id="ownerName" name="ownerName" type="text" required />
+                  </label>
+                  <label>
+                    Business area
+                    <input id="ownerArea" name="ownerArea" type="text" required />
+                  </label>
+                </div>
 
-            <label>
-              Problem / opportunity (2-3 lines)
-              <textarea id="problem" name="problem" rows="4" required></textarea>
-            </label>
+                <label>
+                  Problem / opportunity (2-3 lines)
+                  <textarea id="problem" name="problem" rows="4" required></textarea>
+                </label>
 
-            <label>
-              Desired outcomes (one per line)
-              <textarea
-                id="outcomes"
-                name="outcomes"
-                rows="4"
-                required
-                placeholder="Example: Reduce intake cycle time to 5 business days"
-              ></textarea>
-            </label>
-
-            <fieldset>
-              <legend>Constraints</legend>
-              <div class="grid two-col">
                 <label>
-                  Target Timeline
-                  <input
-                    id="constraintTime"
-                    name="constraintTime"
-                    type="text"
-                    placeholder="e.g., 10-week rollout with pilot in week 6"
-                    aria-describedby="example-timeline"
-                  />
-                  <span class="field-example" id="example-timeline">Example: Must launch before Fall registration.</span>
-                </label>
-                <label>
-                  Budget
-                  <input
-                    id="constraintBudget"
-                    name="constraintBudget"
-                    type="text"
-                    placeholder="e.g., Fixed at $120,000"
-                    aria-describedby="example-budget"
-                  />
-                  <span class="field-example" id="example-budget">Example: No additional funding after approval.</span>
-                </label>
-                <label>
-                  Staffing needed (roles or teams)
-                  <input
-                    id="constraintStaffing"
-                    name="constraintStaffing"
-                    type="text"
-                    placeholder="e.g., PM, Analyst, Tech Lead, SME support"
-                    aria-describedby="example-staffing"
-                  />
-                  <span class="field-example" id="example-staffing">Example: Existing teams only; no new hires.</span>
-                </label>
-                <label>
-                  Compliance
-                  <input
-                    id="constraintCompliance"
-                    name="constraintCompliance"
-                    type="text"
-                    placeholder="e.g., FERPA and accessibility (WCAG 2.1 AA)"
-                    aria-describedby="example-compliance"
-                  />
-                  <span class="field-example" id="example-compliance">Example: Legal review required before launch.</span>
-                </label>
-                <label>
-                  Technology
-                  <input
-                    id="constraintTech"
-                    name="constraintTech"
-                    type="text"
-                    placeholder="e.g., Must use CUNYfirst + Microsoft 365"
-                    aria-describedby="example-tech"
-                  />
-                  <span class="field-example" id="example-tech">Example: No new platforms without security approval.</span>
+                  Desired outcomes (one per line)
+                  <textarea
+                    id="outcomes"
+                    name="outcomes"
+                    rows="4"
+                    required
+                    placeholder="Example: Reduce intake cycle time to 5 business days"
+                  ></textarea>
                 </label>
               </div>
-            </fieldset>
+            </details>
 
-            <div class="grid two-col">
-              <label>
-                Target go-live date
-                <input id="goLiveDate" name="goLiveDate" type="date" />
-              </label>
-              <label>
-                Urgency
-                <select id="urgency" name="urgency">
-                  <option value="Low">Low</option>
-                  <option value="Moderate" selected>Moderate</option>
-                  <option value="High">High</option>
-                  <option value="Critical">Critical</option>
-                </select>
-              </label>
-            </div>
+            <details class="intake-section" open>
+              <summary>Constraints and timeline</summary>
+              <div class="intake-section-body">
+                <fieldset>
+                  <legend>Constraints</legend>
+                  <div class="grid two-col">
+                    <label>
+                      Target Timeline
+                      <input
+                        id="constraintTime"
+                        name="constraintTime"
+                        type="text"
+                        placeholder="e.g., 10-week rollout with pilot in week 6"
+                        aria-describedby="example-timeline"
+                      />
+                      <span class="field-example" id="example-timeline">Example: Must launch before Fall registration.</span>
+                    </label>
+                    <label>
+                      Budget
+                      <input
+                        id="constraintBudget"
+                        name="constraintBudget"
+                        type="text"
+                        placeholder="e.g., Fixed at $120,000"
+                        aria-describedby="example-budget"
+                      />
+                      <span class="field-example" id="example-budget">Example: No additional funding after approval.</span>
+                    </label>
+                    <label>
+                      Staffing needed (roles or teams)
+                      <input
+                        id="constraintStaffing"
+                        name="constraintStaffing"
+                        type="text"
+                        placeholder="e.g., PM, Analyst, Tech Lead, SME support"
+                        aria-describedby="example-staffing"
+                      />
+                      <span class="field-example" id="example-staffing">Example: Existing teams only; no new hires.</span>
+                    </label>
+                    <label>
+                      Compliance
+                      <input
+                        id="constraintCompliance"
+                        name="constraintCompliance"
+                        type="text"
+                        placeholder="e.g., FERPA and accessibility (WCAG 2.1 AA)"
+                        aria-describedby="example-compliance"
+                      />
+                      <span class="field-example" id="example-compliance">Example: Legal review required before launch.</span>
+                    </label>
+                    <label>
+                      Technology
+                      <input
+                        id="constraintTech"
+                        name="constraintTech"
+                        type="text"
+                        placeholder="e.g., Must use CUNYfirst + Microsoft 365"
+                        aria-describedby="example-tech"
+                      />
+                      <span class="field-example" id="example-tech">Example: No new platforms without security approval.</span>
+                    </label>
+                  </div>
+                </fieldset>
 
-            <label>
-              Stakeholders (key groups)
-              <textarea id="stakeholders" name="stakeholders" rows="3" required></textarea>
-            </label>
+                <div class="grid two-col">
+                  <label>
+                    Target go-live date
+                    <input id="goLiveDate" name="goLiveDate" type="date" />
+                  </label>
+                  <label>
+                    Urgency
+                    <select id="urgency" name="urgency">
+                      <option value="Low">Low</option>
+                      <option value="Moderate" selected>Moderate</option>
+                      <option value="High">High</option>
+                      <option value="Critical">Critical</option>
+                    </select>
+                  </label>
+                </div>
+              </div>
+            </details>
 
-            <label>
-              Systems/tools impacted (optional)
-              <textarea id="systems" name="systems" rows="3"></textarea>
-            </label>
+            <details class="intake-section" open>
+              <summary>Stakeholders and risk</summary>
+              <div class="intake-section-body">
+                <label>
+                  Stakeholders (key groups)
+                  <textarea id="stakeholders" name="stakeholders" rows="3" required></textarea>
+                </label>
 
-            <label>
-              Risks/concerns (optional)
-              <textarea id="risks" name="risks" rows="3"></textarea>
-            </label>
+                <label>
+                  Systems/tools impacted (optional)
+                  <textarea id="systems" name="systems" rows="3"></textarea>
+                </label>
+
+                <label>
+                  Risks/concerns (optional)
+                  <textarea id="risks" name="risks" rows="3"></textarea>
+                </label>
+              </div>
+            </details>
 
             <div class="actions-row">
               <button class="primary-btn" type="submit">Generate Solution Pack</button>
