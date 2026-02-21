@@ -55,7 +55,7 @@ body {
 .eyebrow-subtitle {
   display: block;
   margin-top: 0.18rem;
-  font-size: 0.68rem;
+  font-size: calc(0.68rem + 1pt);
   letter-spacing: 0.01em;
   font-weight: 500;
   color: #5b6f87;
@@ -1148,7 +1148,7 @@ button {
   }
 
   .eyebrow-subtitle {
-    font-size: 0.63rem;
+    font-size: calc(0.63rem + 1pt);
     line-height: 1.35;
   }
 
