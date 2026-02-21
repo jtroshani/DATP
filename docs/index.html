@@ -1,1 +1,335 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CUNY Project Solutions Builder</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="app-header">
+        <div>
+          <p class="eyebrow">
+            <span class="eyebrow-main">Project Intake and Delivery Design</span>
+            <span class="eyebrow-subtitle">Designed by the Department of Academic Technology Projects</span>
+          </p>
+          <h1>CUNY Project Solutions Builder</h1>
+        </div>
+        <div class="complexity-toggle" role="group" aria-label="Complexity level">
+          <span class="toggle-label">Complexity</span>
+          <label><input type="radio" name="complexity" value="Light" /> Light</label>
+          <label><input type="radio" name="complexity" value="Standard" checked /> Standard</label>
+          <label><input type="radio" name="complexity" value="Enterprise" /> Enterprise</label>
+        </div>
+      </header>
 
+      <nav class="tab-nav" role="tablist" aria-label="Dashboard sections">
+        <button class="tab-btn active" id="tabbtn-intake" data-tab="intake" role="tab" aria-selected="true" aria-controls="tab-intake" type="button">Intake</button>
+        <button class="tab-btn" id="tabbtn-solution" data-tab="solution" role="tab" aria-selected="false" aria-controls="tab-solution" type="button">Solution Pack</button>
+        <button class="tab-btn" id="tabbtn-export" data-tab="export" role="tab" aria-selected="false" aria-controls="tab-export" type="button">Export/Copy</button>
+        <button class="tab-btn" id="tabbtn-history" data-tab="history" role="tab" aria-selected="false" aria-controls="tab-history" type="button">Version History</button>
+      </nav>
+
+      <main>
+        <section class="tab-panel active" id="tab-intake" role="tabpanel" tabindex="0" aria-labelledby="tabbtn-intake">
+          <form id="intakeForm" novalidate>
+            <div class="grid two-col">
+              <label>
+                Project title
+                <input id="projectTitle" name="projectTitle" type="text" required />
+              </label>
+              <label>
+                One-sentence goal
+                <input id="projectGoal" name="projectGoal" type="text" required />
+              </label>
+            </div>
+
+            <div class="grid two-col">
+              <label>
+                Business owner / sponsor (name)
+                <input id="ownerName" name="ownerName" type="text" required />
+              </label>
+              <label>
+                Business area
+                <input id="ownerArea" name="ownerArea" type="text" required />
+              </label>
+            </div>
+
+            <label>
+              Problem / opportunity (2-3 lines)
+              <textarea id="problem" name="problem" rows="4" required></textarea>
+            </label>
+
+            <label>
+              Desired outcomes (one per line)
+              <textarea
+                id="outcomes"
+                name="outcomes"
+                rows="4"
+                required
+                placeholder="Example: Reduce intake cycle time to 5 business days"
+              ></textarea>
+            </label>
+
+            <fieldset>
+              <legend>Constraints</legend>
+              <div class="grid two-col">
+                <label>
+                  Target Timeline
+                  <input
+                    id="constraintTime"
+                    name="constraintTime"
+                    type="text"
+                    placeholder="e.g., 10-week rollout with pilot in week 6"
+                    aria-describedby="example-timeline"
+                  />
+                  <span class="field-example" id="example-timeline">Example: Must launch before Fall registration.</span>
+                </label>
+                <label>
+                  Budget
+                  <input
+                    id="constraintBudget"
+                    name="constraintBudget"
+                    type="text"
+                    placeholder="e.g., Fixed at $120,000"
+                    aria-describedby="example-budget"
+                  />
+                  <span class="field-example" id="example-budget">Example: No additional funding after approval.</span>
+                </label>
+                <label>
+                  Staffing needed (roles or teams)
+                  <input
+                    id="constraintStaffing"
+                    name="constraintStaffing"
+                    type="text"
+                    placeholder="e.g., PM, Analyst, Tech Lead, SME support"
+                    aria-describedby="example-staffing"
+                  />
+                  <span class="field-example" id="example-staffing">Example: Existing teams only; no new hires.</span>
+                </label>
+                <label>
+                  Compliance
+                  <input
+                    id="constraintCompliance"
+                    name="constraintCompliance"
+                    type="text"
+                    placeholder="e.g., FERPA and accessibility (WCAG 2.1 AA)"
+                    aria-describedby="example-compliance"
+                  />
+                  <span class="field-example" id="example-compliance">Example: Legal review required before launch.</span>
+                </label>
+                <label>
+                  Technology
+                  <input
+                    id="constraintTech"
+                    name="constraintTech"
+                    type="text"
+                    placeholder="e.g., Must use CUNYfirst + Microsoft 365"
+                    aria-describedby="example-tech"
+                  />
+                  <span class="field-example" id="example-tech">Example: No new platforms without security approval.</span>
+                </label>
+              </div>
+            </fieldset>
+
+            <div class="grid two-col">
+              <label>
+                Target go-live date
+                <input id="goLiveDate" name="goLiveDate" type="date" />
+              </label>
+              <label>
+                Urgency
+                <select id="urgency" name="urgency">
+                  <option value="Low">Low</option>
+                  <option value="Moderate" selected>Moderate</option>
+                  <option value="High">High</option>
+                  <option value="Critical">Critical</option>
+                </select>
+              </label>
+            </div>
+
+            <label>
+              Stakeholders (key groups)
+              <textarea id="stakeholders" name="stakeholders" rows="3" required></textarea>
+            </label>
+
+            <label>
+              Systems/tools impacted (optional)
+              <textarea id="systems" name="systems" rows="3"></textarea>
+            </label>
+
+            <label>
+              Risks/concerns (optional)
+              <textarea id="risks" name="risks" rows="3"></textarea>
+            </label>
+
+            <div class="actions-row">
+              <button class="primary-btn" type="submit">Generate Solution Pack</button>
+              <p id="generationStatus" aria-live="polite"></p>
+            </div>
+
+            <section class="ai-assist-box" aria-label="AI assist">
+              <div class="actions-row">
+                <button class="secondary-btn" type="button" id="aiSuggestIntake">AI Suggest Missing Intake Fields</button>
+                <p id="aiAssistStatus" class="helper-text" aria-live="polite"></p>
+              </div>
+            </section>
+          </form>
+
+          <aside class="followup-questions" id="followupQuestions" aria-live="polite">
+            <h2>Targeted follow-up questions</h2>
+            <p>Add these details to strengthen the output:</p>
+            <ul id="followupList"></ul>
+          </aside>
+        </section>
+
+        <section class="tab-panel" id="tab-solution" role="tabpanel" tabindex="0" aria-labelledby="tabbtn-solution">
+          <div class="solution-header">
+            <h2>Project Management Solution Pack</h2>
+            <button type="button" class="secondary-btn" id="copyFullPack">Copy Full Pack</button>
+          </div>
+          <div id="solutionMeta" class="solution-meta"></div>
+
+          <div class="section-card">
+            <div class="card-header">
+              <h3>Delivery timeline</h3>
+              <button type="button" class="copy-btn" id="copyTimeline">Copy</button>
+            </div>
+            <p class="visual-helper">
+              Key phases, milestones, and target dates.
+            </p>
+            <ol id="timelineVisual" class="timeline-rail" aria-label="Project timeline">
+              <li class="timeline-node timeline-empty">Generate a solution pack from Intake to view the timeline.</li>
+            </ol>
+          </div>
+
+          <div class="section-card">
+            <div class="card-header">
+              <h3>Execution tracker matrix</h3>
+              <button type="button" class="copy-btn" id="copyMatrix">Copy</button>
+            </div>
+            <p class="visual-helper">
+              Track work items, owners, status, due dates, and dependencies.
+            </p>
+            <div class="matrix-wrap">
+              <table class="tracker-table" aria-label="Execution tracker matrix">
+                <thead>
+                  <tr>
+                    <th scope="col">Work item</th>
+                    <th scope="col">Owner</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Due date</th>
+                    <th scope="col">Dependencies</th>
+                  </tr>
+                </thead>
+                <tbody id="matrixBody">
+                  <tr>
+                    <td colspan="5">Generate a solution pack from Intake to view the tracker matrix.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="section-card">
+            <div class="card-header">
+              <h3>A) Executive summary</h3>
+              <button type="button" class="copy-btn" data-copy="sectionA">Copy</button>
+            </div>
+            <pre id="sectionA" class="section-content">Generate a solution pack from Intake to view this section.</pre>
+          </div>
+
+          <div class="section-card">
+            <div class="card-header">
+              <h3>B) Governance + decision model</h3>
+              <button type="button" class="copy-btn" data-copy="sectionB">Copy</button>
+            </div>
+            <pre id="sectionB" class="section-content">Generate a solution pack from Intake to view this section.</pre>
+          </div>
+
+          <div class="section-card">
+            <div class="card-header">
+              <h3>C) Process model + mapping</h3>
+              <button type="button" class="copy-btn" data-copy="sectionC">Copy</button>
+            </div>
+            <pre id="sectionC" class="section-content">Generate a solution pack from Intake to view this section.</pre>
+          </div>
+
+          <div class="section-card">
+            <div class="card-header">
+              <h3>D) Planning deliverables</h3>
+              <button type="button" class="copy-btn" data-copy="sectionD">Copy</button>
+            </div>
+            <pre id="sectionD" class="section-content">Generate a solution pack from Intake to view this section.</pre>
+          </div>
+
+          <div class="section-card">
+            <div class="card-header">
+              <h3>E) Execution + accountability</h3>
+              <button type="button" class="copy-btn" data-copy="sectionE">Copy</button>
+            </div>
+            <pre id="sectionE" class="section-content">Generate a solution pack from Intake to view this section.</pre>
+          </div>
+
+          <div class="section-card">
+            <div class="card-header">
+              <h3>F) Expert collaboration recommendations</h3>
+              <button type="button" class="copy-btn" data-copy="sectionF">Copy</button>
+            </div>
+            <pre id="sectionF" class="section-content">Generate a solution pack from Intake to view this section.</pre>
+          </div>
+
+          <div class="section-card">
+            <div class="card-header">
+              <h3>G) Next steps</h3>
+              <button type="button" class="copy-btn" data-copy="sectionG">Copy</button>
+            </div>
+            <pre id="sectionG" class="section-content">Generate a solution pack from Intake to view this section.</pre>
+          </div>
+
+          <div class="section-card">
+            <div class="card-header">
+              <h3>H) AI insights and recommendations</h3>
+              <button type="button" class="copy-btn" data-copy="sectionH">Copy</button>
+            </div>
+            <pre id="sectionH" class="section-content">Generate a solution pack from Intake to view this section.</pre>
+          </div>
+        </section>
+
+        <section class="tab-panel" id="tab-export" role="tabpanel" tabindex="0" aria-labelledby="tabbtn-export">
+          <h2>Export and Copy</h2>
+          <div class="export-grid">
+            <button type="button" class="primary-btn" id="copySummary">Copy Executive Summary</button>
+            <button type="button" class="primary-btn" id="copyGovernance">Copy Governance Model</button>
+            <button type="button" class="primary-btn" id="copyNextSteps">Copy Next Steps</button>
+            <button type="button" class="primary-btn" id="copyAIInsights">Copy AI Insights</button>
+            <button type="button" class="secondary-btn" id="printPdf">Export to PDF</button>
+          </div>
+          <p class="helper-text">
+            PDF export uses your browser print dialog with minimal print styling.
+          </p>
+        </section>
+
+        <section class="tab-panel" id="tab-history" role="tabpanel" tabindex="0" aria-labelledby="tabbtn-history">
+          <div class="history-header">
+            <h2>Version History</h2>
+            <button type="button" class="secondary-btn" id="clearHistory">Clear History</button>
+          </div>
+          <p class="helper-text">Saved locally on this device.</p>
+          <ul id="versionList" class="version-list"></ul>
+        </section>
+      </main>
+
+      <aside class="help-panel" aria-label="Need help">
+        <h2>Need help?</h2>
+        <p>
+          Direct contact:
+          <a href="mailto:jetmir.troshani@cuny.edu">jetmir.troshani@cuny.edu</a>
+        </p>
+      </aside>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
