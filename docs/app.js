@@ -160,6 +160,12 @@ const FEEDBACK_ENTRIES = [
     receivedAt: "2026-02-22",
     comment: "This is a very cool tool. It’s user friendly and would provide individuals or organizations without PM infrastructure a solid framework.",
   },
+  {
+    id: "feedback-2026-02-22-mc-1",
+    source: "MC",
+    receivedAt: "2026-02-22",
+    comment: "The Project Management Solution Builder is really helpful—it quickly creates a project plan and streamlines the process. My suggestion would be to add three dedicated sections for a RAID log, lessons learned, and a RACI chart, so the tool also provides organized documentation tailored to each project.",
+  },
 ];
 
 const SAMPLE_PROJECTS = [
