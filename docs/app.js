@@ -61,7 +61,7 @@ const aiSuggestIntakeEl = document.getElementById("aiSuggestIntake");
 const aiAssistStatusEl = document.getElementById("aiAssistStatus");
 const generationLoaderEl = document.getElementById("generationLoader");
 const loaderProgressFillEl = document.getElementById("loaderProgressFill");
-const logoHomeBtnEl = document.getElementById("logoHomeBtn");
+const logoHomeTriggerEl = document.getElementById("logoHomeBtn") || document.querySelector(".header-logo");
 
 const sectionEls = {
   sectionA: document.getElementById("sectionA"),
@@ -305,8 +305,8 @@ function attachEventHandlers() {
     tab.addEventListener("click", () => setActiveTab(tab.dataset.tab));
   });
 
-  if (logoHomeBtnEl) {
-    logoHomeBtnEl.addEventListener("click", () => {
+  if (logoHomeTriggerEl) {
+    logoHomeTriggerEl.addEventListener("click", () => {
       setActiveTab("intake");
       scrollToIntakeTop();
     });
