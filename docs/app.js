@@ -107,6 +107,7 @@ const state = {
   retentionCleanupTimer: null,
   retentionWarningShown: false,
   isGenerating: false,
+  generationToken: 0,
   aiConfig: {
     mode: "local",
     model: "local-heuristic-v2",
@@ -334,9 +335,9 @@ function attachEventHandlers() {
   });
 
   if (logoHomeTriggerEl) {
-    logoHomeTriggerEl.addEventListener("click", () => {
-      setActiveTab("intake");
-      scrollToIntakeTop();
+    logoHomeTriggerEl.addEventListener("click", (event) => {
+      event.preventDefault();
+      returnToIntakeAndReset();
     });
   }
 
@@ -393,6 +394,8 @@ function attachEventHandlers() {
     }
 
     trackAnalyticsEvent(ANALYTICS_EVENT_TYPES.generateClicked);
+    const generationToken = state.generationToken + 1;
+    state.generationToken = generationToken;
 
     state.aiConfig = getAIConfig();
     const intake = getIntakeData();
@@ -411,6 +414,7 @@ function attachEventHandlers() {
       let pack = buildSolutionPack(intake, complexity, followups, state.aiConfig);
       pack = await enhancePackWithAI(pack, intake, followups, state.aiConfig);
       await minimumDelay;
+      if (generationToken !== state.generationToken) return;
 
       state.currentPack = pack;
       renderSolutionPack(pack);
@@ -419,14 +423,17 @@ function attachEventHandlers() {
       generatedPack = pack;
     } catch {
       await minimumDelay;
+      if (generationToken !== state.generationToken) return;
       generationStatusEl.textContent = "Could not generate the solution pack. Please try again.";
     } finally {
-      stopGenerationLoader();
-      state.isGenerating = false;
-      updateGenerateButtonState();
+      if (generationToken === state.generationToken) {
+        stopGenerationLoader();
+        state.isGenerating = false;
+        updateGenerateButtonState();
+      }
     }
 
-    if (generatedPack) {
+    if (generatedPack && generationToken === state.generationToken) {
       setActiveTab("solution");
       scrollToSolutionPackTop();
       generationStatusEl.textContent = generatedPack.aiMeta?.mode !== "local"
@@ -671,6 +678,26 @@ function scrollToIntakeTop() {
     const targetTop = panels.intake.getBoundingClientRect().top + window.scrollY;
     window.scrollTo({ top: Math.max(0, targetTop - 6), left: 0, behavior: "smooth" });
   });
+}
+
+function returnToIntakeAndReset() {
+  clearSessionData("Ready for a fresh intake. Previous form and solution content were cleared.");
+  setActiveTab("intake");
+  setActiveSolutionTab("summary");
+  state.aiConfig = getAIConfig();
+  syncAIControls(true);
+  validateRequiredIntakeFields();
+  document.querySelectorAll(".intake-section").forEach((section) => {
+    section.open = true;
+  });
+  if (retentionStatusEl) retentionStatusEl.textContent = "";
+  scrollToIntakeTop();
+  const primaryField = document.getElementById("projectTitle");
+  if (primaryField) {
+    window.setTimeout(() => {
+      primaryField.focus({ preventScroll: true });
+    }, 220);
+  }
 }
 
 function getActiveTabKey() {
@@ -3470,6 +3497,7 @@ function refreshRetentionTimers() {
 }
 
 function clearSessionData(statusMessage = "Session data cleared.") {
+  state.generationToken += 1;
   clearRetentionTimers();
   stopGenerationLoader();
   state.isGenerating = false;
