@@ -1249,19 +1249,6 @@ body.is-preparing-pdf-layout .copy-btn {
   display: none !important;
 }
 
-body.is-preparing-pdf-layout .quick-actions-bar,
-body.is-preparing-pdf-layout .solution-subtabs {
-  display: none !important;
-}
-
-body.is-preparing-pdf-layout .solution-panel {
-  display: block !important;
-}
-
-body.is-preparing-pdf-layout .quick-panel .panel-body {
-  display: block !important;
-}
-
 body.is-preparing-pdf-layout .section-card {
   break-inside: avoid;
   page-break-inside: avoid;
@@ -1356,18 +1343,6 @@ body.is-preparing-pdf-layout .raid-list li {
   border-radius: 12px;
   background: color-mix(in srgb, var(--white) 88%, var(--neutral-pearl));
   box-shadow: 0 6px 20px rgba(1, 29, 73, 0.08);
-}
-
-#exportSolutionPdf,
-#quickExportPdfBtn {
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.primary-btn.is-busy,
-.secondary-btn.is-busy {
-  opacity: 0.9;
-  cursor: progress;
 }
 
 .quick-field {

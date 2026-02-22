@@ -7,7 +7,6 @@ const ANALYTICS_SHARED_API_BASE = "https://api.countapi.xyz";
 const ANALYTICS_SHARED_SITE_ID = "pm-solution-builder-ghpages-unified";
 const ANALYTICS_SHARED_NAMESPACE_PREFIX = "cuny-pm-solution-builder";
 const ANALYTICS_SHARED_CACHE_TTL_MS = 30 * 1000;
-const HTML2PDF_BUNDLE_URL = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
 const RETENTION_MS = 15 * 60 * 1000;
 const RETENTION_WARNING_MS = 60 * 1000;
 
@@ -124,7 +123,6 @@ const state = {
   retentionCleanupTimer: null,
   retentionWarningShown: false,
   isGenerating: false,
-  isExportingPdf: false,
   generationToken: 0,
   analyticsRange: "daily",
   analyticsChartData: null,
@@ -139,7 +137,6 @@ const state = {
 };
 
 let analyticsSharedNamespaceCache = "";
-let html2PdfLoaderPromise = null;
 
 const SIMPLE_AI_DEFAULTS = {
   localModel: "local-heuristic-v2",
@@ -548,9 +545,8 @@ function attachEventHandlers() {
   }
 
   if (quickExportPdfBtnEl) {
-    attachPortableTapHandler(quickExportPdfBtnEl, () => {
-      if (!ensurePackExists()) return;
-      void exportSolutionPackPdf();
+    quickExportPdfBtnEl.addEventListener("click", () => {
+      document.getElementById("printPdf")?.click();
     });
   }
 
@@ -603,9 +599,23 @@ function attachEventHandlers() {
   });
 
   if (exportSolutionPdfEl) {
-    attachPortableTapHandler(exportSolutionPdfEl, () => {
+    exportSolutionPdfEl.addEventListener("click", () => {
       if (!ensurePackExists()) return;
-      void exportSolutionPackPdf();
+      exportSolutionPackPdf();
+    });
+  }
+
+  const printPdfEl = document.getElementById("printPdf");
+  if (printPdfEl) {
+    printPdfEl.addEventListener("click", () => {
+      if (!state.currentPack) {
+        generationStatusEl.textContent = "Generate a solution pack before exporting.";
+        return;
+      }
+      setActiveTab("export");
+      window.requestAnimationFrame(() => {
+        window.print();
+      });
     });
   }
 
@@ -747,175 +757,6 @@ function waitMs(ms) {
   return new Promise((resolve) => {
     window.setTimeout(resolve, ms);
   });
-}
-
-function attachPortableTapHandler(element, handler) {
-  if (!element || typeof handler !== "function") return;
-
-  let lastInvocationAt = 0;
-  const invoke = (event) => {
-    const now = Date.now();
-    if (now - lastInvocationAt < 500) {
-      if (event?.cancelable) event.preventDefault();
-      return;
-    }
-
-    if (event?.type === "touchend" || (event?.type === "pointerup" && event.pointerType !== "mouse")) {
-      if (event?.cancelable) event.preventDefault();
-    }
-
-    lastInvocationAt = now;
-    handler(event);
-  };
-
-  element.addEventListener("click", invoke);
-  element.addEventListener("pointerup", (event) => {
-    if (event.pointerType === "mouse") return;
-    invoke(event);
-  });
-  element.addEventListener("touchend", invoke, { passive: false });
-}
-
-function isLikelyMobileDevice() {
-  if (window.matchMedia?.("(pointer: coarse)").matches) return true;
-  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "");
-}
-
-function sanitizePdfFilename(value) {
-  const fallback = "project-management-solution-pack";
-  const normalized = normalize(value)
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return (normalized || fallback).slice(0, 80);
-}
-
-function setPdfExportButtonsBusy(isBusy, label = "Export to PDF") {
-  [exportSolutionPdfEl, quickExportPdfBtnEl].filter(Boolean).forEach((button) => {
-    if (!button.dataset.defaultLabel) {
-      button.dataset.defaultLabel = normalize(button.textContent) || "Export to PDF";
-    }
-    button.disabled = isBusy;
-    button.setAttribute("aria-disabled", isBusy ? "true" : "false");
-    button.setAttribute("aria-busy", isBusy ? "true" : "false");
-    button.classList.toggle("is-busy", isBusy);
-    button.textContent = isBusy ? label : button.dataset.defaultLabel;
-  });
-}
-
-function ensureHtml2PdfLibrary() {
-  if (window.html2pdf) {
-    return Promise.resolve(window.html2pdf);
-  }
-
-  if (html2PdfLoaderPromise) {
-    return html2PdfLoaderPromise;
-  }
-
-  html2PdfLoaderPromise = new Promise((resolve, reject) => {
-    const existingScript = document.querySelector(`script[data-lib="html2pdf"][src="${HTML2PDF_BUNDLE_URL}"]`);
-    if (existingScript) {
-      existingScript.addEventListener("load", () => resolve(window.html2pdf), { once: true });
-      existingScript.addEventListener("error", () => reject(new Error("PDF library failed to load.")), { once: true });
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src = HTML2PDF_BUNDLE_URL;
-    script.async = true;
-    script.defer = true;
-    script.crossOrigin = "anonymous";
-    script.dataset.lib = "html2pdf";
-    script.onload = () => {
-      if (window.html2pdf) {
-        resolve(window.html2pdf);
-        return;
-      }
-      reject(new Error("PDF library loaded but is not available."));
-    };
-    script.onerror = () => {
-      reject(new Error("Could not load PDF export library."));
-    };
-    document.head.appendChild(script);
-  }).catch((error) => {
-    html2PdfLoaderPromise = null;
-    throw error;
-  });
-
-  return html2PdfLoaderPromise;
-}
-
-async function waitForDocumentFontsReady(timeoutMs = 6000) {
-  if (!document.fonts?.ready) return;
-  try {
-    await Promise.race([
-      document.fonts.ready,
-      waitMs(timeoutMs),
-    ]);
-  } catch {
-    // Continue export even if the browser doesn't fully support font loading events.
-  }
-}
-
-async function waitForImagesInElement(rootElement, timeoutMs = 8000) {
-  if (!rootElement) return;
-  const images = Array.from(rootElement.querySelectorAll("img"));
-  if (!images.length) return;
-
-  const waiters = images.map((img) => new Promise((resolve) => {
-    if (img.complete && img.naturalWidth > 0) {
-      if (typeof img.decode === "function") {
-        img.decode().catch(() => {}).finally(resolve);
-        return;
-      }
-      resolve();
-      return;
-    }
-
-    let settled = false;
-    const done = () => {
-      if (settled) return;
-      settled = true;
-      img.removeEventListener("load", onLoad);
-      img.removeEventListener("error", onError);
-      resolve();
-    };
-    const onLoad = () => done();
-    const onError = () => done();
-    img.addEventListener("load", onLoad, { once: true });
-    img.addEventListener("error", onError, { once: true });
-    window.setTimeout(done, timeoutMs);
-  }));
-
-  await Promise.all(waiters);
-}
-
-function normalizeExportImageUrls(rootElement) {
-  if (!rootElement) return;
-  const images = Array.from(rootElement.querySelectorAll("img[src]"));
-  images.forEach((img) => {
-    const rawSrc = img.getAttribute("src");
-    if (!rawSrc || /^(data:|blob:)/i.test(rawSrc)) return;
-    try {
-      const absoluteUrl = new URL(rawSrc, window.location.href).href;
-      if (img.getAttribute("src") !== absoluteUrl) {
-        img.setAttribute("src", absoluteUrl);
-      }
-      if (!img.getAttribute("crossorigin")) {
-        img.setAttribute("crossorigin", "anonymous");
-      }
-    } catch {
-      // Ignore malformed URLs and continue.
-    }
-  });
-}
-
-async function waitForPaintCycles(cycles = 2) {
-  for (let i = 0; i < cycles; i += 1) {
-    await new Promise((resolve) => {
-      window.requestAnimationFrame(() => resolve());
-    });
-  }
 }
 
 function isLocalAnalyticsEnvironment() {
@@ -1935,99 +1776,37 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
-async function exportSolutionPackPdf() {
+function exportSolutionPackPdf() {
   if (!panels.solution) {
     generationStatusEl.textContent = "Solution Pack view is not available for export.";
     return;
   }
-  if (!state.currentPack) {
-    generationStatusEl.textContent = "Generate a solution pack before exporting.";
-    return;
-  }
-  if (state.isExportingPdf) return;
 
   const previousTab = getActiveTabKey();
-  const wasPreparingLayout = document.body.classList.contains("is-preparing-pdf-layout");
-  const previousCollapseMode = quickTogglePanelsEl?.dataset?.mode || "expanded";
-  state.isExportingPdf = true;
-  setPdfExportButtonsBusy(true, "Exporting PDF...");
-
   let hasCleanedUp = false;
   const cleanup = () => {
     if (hasCleanedUp) return;
     hasCleanedUp = true;
-    if (!wasPreparingLayout) {
-      document.body.classList.remove("is-preparing-pdf-layout");
-    }
-    if (previousCollapseMode === "collapsed") {
-      setSolutionPanelsCollapsed(true);
-    } else {
-      setSolutionPanelsCollapsed(false);
-    }
+    document.body.classList.remove("print-solution-pack");
     if (previousTab && previousTab !== "solution") {
       setActiveTab(previousTab);
     }
-    state.isExportingPdf = false;
-    setPdfExportButtonsBusy(false);
   };
 
-  try {
-    generationStatusEl.textContent = "Preparing Solution Pack PDF export...";
-    setActiveTab("solution");
-    setSolutionPanelsCollapsed(false);
+  setActiveTab("solution");
+  buildSolutionPdfToc();
+  document.body.classList.add("print-solution-pack");
+  generationStatusEl.textContent = "Preparing Solution Pack PDF export...";
 
-    if (!wasPreparingLayout) {
-      document.body.classList.add("is-preparing-pdf-layout");
-    }
+  window.addEventListener("afterprint", cleanup, { once: true });
 
-    buildSolutionPdfToc();
-    normalizeExportImageUrls(panels.solution);
-    await waitForDocumentFontsReady();
-    await waitForImagesInElement(panels.solution);
-    await waitForPaintCycles(3);
-
-    const html2pdf = await ensureHtml2PdfLibrary();
-    const fileBase = sanitizePdfFilename(state.currentPack?.title || state.currentPack?.intakeSnapshot?.projectTitle);
-    const captureWidth = Math.max(710, Math.round(panels.solution.getBoundingClientRect().width || 710));
-    const scale = isLikelyMobileDevice()
-      ? Math.min(1.35, Math.max(1.1, window.devicePixelRatio || 1))
-      : Math.min(1.8, Math.max(1.25, (window.devicePixelRatio || 1) * 1.15));
-
-    await html2pdf()
-      .set({
-        filename: `${fileBase}.pdf`,
-        margin: [0.55, 0.55, 0.55, 0.55],
-        image: { type: "jpeg", quality: 0.96 },
-        html2canvas: {
-          useCORS: true,
-          allowTaint: false,
-          backgroundColor: "#ffffff",
-          logging: false,
-          scale,
-          scrollX: 0,
-          scrollY: 0,
-          windowWidth: captureWidth,
-        },
-        jsPDF: {
-          unit: "in",
-          format: "letter",
-          orientation: "portrait",
-          compress: true,
-        },
-        pagebreak: {
-          mode: ["css", "legacy"],
-          avoid: [".section-card", ".tracker-table tr", ".toc-item"],
-        },
-      })
-      .from(panels.solution)
-      .save();
-
-    generationStatusEl.textContent = "PDF exported successfully.";
-  } catch {
-    generationStatusEl.textContent = "Could not export PDF on this device right now. Please retry after the page finishes loading.";
-  } finally {
-    cleanup();
-  }
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
+      window.print();
+      window.setTimeout(cleanup, 1200);
+      generationStatusEl.textContent = "PDF export opened. Use Save as PDF in the print dialog.";
+    });
+  });
 }
 
 function setActiveSolutionTab(key) {
