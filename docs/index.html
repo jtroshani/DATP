@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Project Management Solution Builder</title>
-    <link rel="stylesheet" href="styles.css?v=20260222g" />
+    <link rel="stylesheet" href="styles.css?v=20260222h" />
   </head>
   <body>
     <div class="app-shell">
@@ -432,7 +432,7 @@
         <section class="tab-panel" id="tab-analytics" role="tabpanel" tabindex="0" aria-labelledby="tabbtn-analytics">
           <div class="analytics-header">
             <h2>Analytics</h2>
-            <p class="helper-text">Public usage metrics. Counts only: form page loads and Generate Solution Pack clicks.</p>
+            <p class="helper-text">Public usage metrics shared across devices for this deployed site. Counts only: form page loads and Generate Solution Pack clicks.</p>
           </div>
 
           <div class="analytics-content" id="analyticsContent">
@@ -505,6 +505,15 @@
             </div>
 
             <p id="analyticsLastUpdated" class="helper-text analytics-last-updated"></p>
+
+            <section class="feedback-section" id="feedbackSection" aria-label="User feedback">
+              <div class="feedback-section-header">
+                <h3>Feedback</h3>
+                <p class="helper-text">User comments shown in chronological order.</p>
+              </div>
+              <div class="feedback-list" id="feedbackList"></div>
+              <p class="feedback-empty helper-text" id="feedbackEmpty" hidden>No feedback yet.</p>
+            </section>
           </div>
         </section>
       </main>
@@ -534,6 +543,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=20260222i"></script>
+    <script src="app.js?v=20260222k"></script>
   </body>
 </html>

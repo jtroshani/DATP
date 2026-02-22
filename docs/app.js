@@ -2,12 +2,19 @@ const STORAGE_KEY = "cunySolutionPackHistorySession";
 const RETENTION_EXPIRY_KEY = "cunySessionRetentionExpiry";
 const SAMPLE_ROTATION_KEY = "cunySampleRotationNextIndex";
 const ANALYTICS_STORAGE_KEY = "cunyPmAppAnalyticsEvents";
+const ANALYTICS_SHARED_API_BASE = "https://api.countapi.xyz";
+const ANALYTICS_SHARED_NAMESPACE_PREFIX = "cuny-pm-solution-builder";
+const ANALYTICS_SHARED_CACHE_TTL_MS = 30 * 1000;
 const RETENTION_MS = 15 * 60 * 1000;
 const RETENTION_WARNING_MS = 60 * 1000;
 
 const ANALYTICS_EVENT_TYPES = {
   formPageLoad: "form_page_load",
   generateClicked: "generate_solution_pack_clicked",
+};
+const ANALYTICS_EVENT_COUNTER_CODES = {
+  [ANALYTICS_EVENT_TYPES.formPageLoad]: "fpl",
+  [ANALYTICS_EVENT_TYPES.generateClicked]: "gsp",
 };
 
 const tabs = document.querySelectorAll(".tab-btn");
@@ -86,6 +93,8 @@ const analyticsGenerateTotalCellEl = document.getElementById("analytics-generate
 const analyticsUsageChartEl = document.getElementById("analyticsUsageChart");
 const analyticsChartEmptyEl = document.getElementById("analyticsChartEmpty");
 const analyticsRangeBtns = document.querySelectorAll(".analytics-range-btn");
+const feedbackListEl = document.getElementById("feedbackList");
+const feedbackEmptyEl = document.getElementById("feedbackEmpty");
 const requiredIntakeFields = intakeForm
   ? Array.from(intakeForm.querySelectorAll("input[required], textarea[required], select[required]"))
   : [];
@@ -112,6 +121,9 @@ const state = {
   isGenerating: false,
   generationToken: 0,
   analyticsRange: "daily",
+  analyticsChartData: null,
+  analyticsRenderRequestId: 0,
+  analyticsSharedCache: {},
   aiConfig: {
     mode: "local",
     model: "local-heuristic-v2",
@@ -120,6 +132,8 @@ const state = {
   },
 };
 
+let analyticsSharedNamespaceCache = "";
+
 const SIMPLE_AI_DEFAULTS = {
   localModel: "local-heuristic-v2",
   cloudModel: "openrouter/free",
@@ -127,6 +141,15 @@ const SIMPLE_AI_DEFAULTS = {
 };
 
 const STATUS_PHASES = ["Initiation", "Planning", "Execution", "M&C", "Closure"];
+
+const FEEDBACK_ENTRIES = [
+  {
+    id: "feedback-2026-02-22-tpb-1",
+    source: "TPB",
+    receivedAt: "2026-02-22",
+    comment: "This is a very cool tool. It’s user friendly and would provide individuals or organizations without PM infrastructure a solid framework.",
+  },
+];
 
 const SAMPLE_PROJECTS = [
   {
@@ -331,7 +354,8 @@ function init() {
   }
   initializeRetentionLifecycle();
   renderVersionHistory();
-  renderAnalyticsCounts();
+  renderFeedbackSection();
+  void renderAnalyticsCounts();
 }
 
 function attachEventHandlers() {
@@ -349,7 +373,7 @@ function attachEventHandlers() {
   if (analyticsRefreshEl) {
     analyticsRefreshEl.addEventListener("click", () => {
       state.analyticsEvents = loadAnalyticsEvents();
-      renderAnalyticsCounts();
+      void renderAnalyticsCounts({ force: true });
     });
   }
 
@@ -679,7 +703,7 @@ function setActiveTab(key) {
 
   if (key === "analytics") {
     state.analyticsEvents = loadAnalyticsEvents();
-    renderAnalyticsCounts();
+    void renderAnalyticsCounts({ force: true });
   }
 }
 
@@ -730,6 +754,275 @@ function waitMs(ms) {
   });
 }
 
+function getAnalyticsSharedNamespace() {
+  if (analyticsSharedNamespaceCache) return analyticsSharedNamespaceCache;
+  const host = normalize(window.location.hostname).toLowerCase() || "local";
+  const path = normalize(window.location.pathname).toLowerCase() || "/";
+  const slug = `${host}${path}`
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "default";
+  analyticsSharedNamespaceCache = `${ANALYTICS_SHARED_NAMESPACE_PREFIX}-${slug}`.slice(0, 96);
+  return analyticsSharedNamespaceCache;
+}
+
+function getAnalyticsEventCounterCode(type) {
+  return ANALYTICS_EVENT_COUNTER_CODES[type] || "evt";
+}
+
+function getAnalyticsDayBucketId(dateValue) {
+  return toInputDate(startOfDay(dateValue));
+}
+
+function getAnalyticsWeekBucketId(dateValue) {
+  return toInputDate(getStartOfWeek(dateValue));
+}
+
+function getAnalyticsMonthBucketId(dateValue) {
+  const date = startOfDay(dateValue);
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  return `${date.getFullYear()}-${month}`;
+}
+
+function getAnalyticsYearBucketId(dateValue) {
+  return String(startOfDay(dateValue).getFullYear());
+}
+
+function getAnalyticsBucketIdForRange(range, dateValue) {
+  if (range === "yearly") return getAnalyticsYearBucketId(dateValue);
+  if (range === "monthly") return getAnalyticsMonthBucketId(dateValue);
+  if (range === "weekly") return getAnalyticsWeekBucketId(dateValue);
+  return getAnalyticsDayBucketId(dateValue);
+}
+
+function buildSharedAnalyticsCounterKey(type, scope, bucketId = "") {
+  const code = getAnalyticsEventCounterCode(type);
+  return scope === "total" ? `${code}:total` : `${code}:${scope}:${bucketId}`;
+}
+
+function buildSharedAnalyticsTrackingKeys(type, atDate = new Date()) {
+  return [
+    buildSharedAnalyticsCounterKey(type, "total"),
+    buildSharedAnalyticsCounterKey(type, "day", getAnalyticsDayBucketId(atDate)),
+    buildSharedAnalyticsCounterKey(type, "week", getAnalyticsWeekBucketId(atDate)),
+    buildSharedAnalyticsCounterKey(type, "month", getAnalyticsMonthBucketId(atDate)),
+    buildSharedAnalyticsCounterKey(type, "year", getAnalyticsYearBucketId(atDate)),
+  ];
+}
+
+function buildAnalyticsCacheKey(range, nowDate = new Date()) {
+  return [
+    normalize(range).toLowerCase() || "daily",
+    getAnalyticsDayBucketId(nowDate),
+    getAnalyticsWeekBucketId(nowDate),
+    getAnalyticsMonthBucketId(nowDate),
+    getAnalyticsYearBucketId(nowDate),
+  ].join("|");
+}
+
+async function readSharedAnalyticsCounter(counterKey) {
+  const namespace = encodeURIComponent(getAnalyticsSharedNamespace());
+  const key = encodeURIComponent(counterKey);
+  const response = await fetch(`${ANALYTICS_SHARED_API_BASE}/get/${namespace}/${key}`, {
+    method: "GET",
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    if (response.status === 404) return 0;
+    throw new Error(`Analytics get failed: ${response.status}`);
+  }
+
+  const payload = await response.json();
+  const value = Number(payload?.value);
+  return Number.isFinite(value) && value >= 0 ? value : 0;
+}
+
+async function incrementSharedAnalyticsCounter(counterKey) {
+  const namespace = encodeURIComponent(getAnalyticsSharedNamespace());
+  const key = encodeURIComponent(counterKey);
+  const response = await fetch(`${ANALYTICS_SHARED_API_BASE}/hit/${namespace}/${key}`, {
+    method: "GET",
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Analytics hit failed: ${response.status}`);
+  }
+
+  const payload = await response.json();
+  const value = Number(payload?.value);
+  return Number.isFinite(value) && value >= 0 ? value : 0;
+}
+
+async function trackSharedAnalyticsEvent(type) {
+  const keys = buildSharedAnalyticsTrackingKeys(type, new Date());
+  if (!keys.length) return;
+
+  const results = await Promise.allSettled(keys.map((key) => incrementSharedAnalyticsCounter(key)));
+  const hasSuccess = results.some((result) => result.status === "fulfilled");
+  if (hasSuccess) {
+    state.analyticsSharedCache = {};
+  }
+}
+
+function buildAnalyticsChartDataFromBuckets(buckets) {
+  const list = Array.isArray(buckets) ? buckets : [];
+  const maxCount = list.reduce(
+    (currentMax, point) => Math.max(currentMax, Number(point.formCount) || 0, Number(point.generateCount) || 0),
+    0
+  );
+  const totalCount = list.reduce(
+    (sum, point) => sum + (Number(point.formCount) || 0) + (Number(point.generateCount) || 0),
+    0
+  );
+  return {
+    buckets: list,
+    maxCount,
+    totalCount,
+  };
+}
+
+function buildLocalAnalyticsView(range) {
+  const now = new Date();
+  const startOfTodayTs = startOfDay(now).getTime();
+  const startOfWeekTs = getStartOfWeek(now).getTime();
+  const startOfMonthTs = getStartOfMonth(now).getTime();
+
+  return {
+    source: "local",
+    sourceLabel: "Local device fallback",
+    summary: {
+      form: {
+        daily: countEventsSince(ANALYTICS_EVENT_TYPES.formPageLoad, startOfTodayTs),
+        weekly: countEventsSince(ANALYTICS_EVENT_TYPES.formPageLoad, startOfWeekTs),
+        monthly: countEventsSince(ANALYTICS_EVENT_TYPES.formPageLoad, startOfMonthTs),
+        total: countEventsTotal(ANALYTICS_EVENT_TYPES.formPageLoad),
+      },
+      generate: {
+        daily: countEventsSince(ANALYTICS_EVENT_TYPES.generateClicked, startOfTodayTs),
+        weekly: countEventsSince(ANALYTICS_EVENT_TYPES.generateClicked, startOfWeekTs),
+        monthly: countEventsSince(ANALYTICS_EVENT_TYPES.generateClicked, startOfMonthTs),
+        total: countEventsTotal(ANALYTICS_EVENT_TYPES.generateClicked),
+      },
+    },
+    chartData: buildAnalyticsTimeSeries(range),
+  };
+}
+
+async function fetchSharedAnalyticsView(range, { force = false } = {}) {
+  const now = new Date();
+  const cacheKey = buildAnalyticsCacheKey(range, now);
+  const cached = state.analyticsSharedCache?.[cacheKey];
+  if (!force && cached && Date.now() - Number(cached.fetchedAt || 0) < ANALYTICS_SHARED_CACHE_TTL_MS) {
+    return cached.data;
+  }
+
+  const summary = {
+    form: { daily: 0, weekly: 0, monthly: 0, total: 0 },
+    generate: { daily: 0, weekly: 0, monthly: 0, total: 0 },
+  };
+  const chartBuckets = buildAnalyticsBuckets(range, now).map((bucket) => ({
+    ...bucket,
+    formCount: 0,
+    generateCount: 0,
+  }));
+  const chartScope = range === "yearly"
+    ? "year"
+    : range === "monthly"
+      ? "month"
+      : range === "weekly"
+        ? "week"
+        : "day";
+
+  const jobs = [];
+  const addCounterJob = (counterKey, applyValue) => {
+    jobs.push({
+      applyValue,
+      promise: readSharedAnalyticsCounter(counterKey),
+    });
+  };
+
+  addCounterJob(
+    buildSharedAnalyticsCounterKey(ANALYTICS_EVENT_TYPES.formPageLoad, "day", getAnalyticsDayBucketId(now)),
+    (value) => { summary.form.daily = value; }
+  );
+  addCounterJob(
+    buildSharedAnalyticsCounterKey(ANALYTICS_EVENT_TYPES.formPageLoad, "week", getAnalyticsWeekBucketId(now)),
+    (value) => { summary.form.weekly = value; }
+  );
+  addCounterJob(
+    buildSharedAnalyticsCounterKey(ANALYTICS_EVENT_TYPES.formPageLoad, "month", getAnalyticsMonthBucketId(now)),
+    (value) => { summary.form.monthly = value; }
+  );
+  addCounterJob(
+    buildSharedAnalyticsCounterKey(ANALYTICS_EVENT_TYPES.formPageLoad, "total"),
+    (value) => { summary.form.total = value; }
+  );
+
+  addCounterJob(
+    buildSharedAnalyticsCounterKey(ANALYTICS_EVENT_TYPES.generateClicked, "day", getAnalyticsDayBucketId(now)),
+    (value) => { summary.generate.daily = value; }
+  );
+  addCounterJob(
+    buildSharedAnalyticsCounterKey(ANALYTICS_EVENT_TYPES.generateClicked, "week", getAnalyticsWeekBucketId(now)),
+    (value) => { summary.generate.weekly = value; }
+  );
+  addCounterJob(
+    buildSharedAnalyticsCounterKey(ANALYTICS_EVENT_TYPES.generateClicked, "month", getAnalyticsMonthBucketId(now)),
+    (value) => { summary.generate.monthly = value; }
+  );
+  addCounterJob(
+    buildSharedAnalyticsCounterKey(ANALYTICS_EVENT_TYPES.generateClicked, "total"),
+    (value) => { summary.generate.total = value; }
+  );
+
+  chartBuckets.forEach((bucket, index) => {
+    addCounterJob(
+      buildSharedAnalyticsCounterKey(ANALYTICS_EVENT_TYPES.formPageLoad, chartScope, bucket.bucketId || ""),
+      (value) => { chartBuckets[index].formCount = value; }
+    );
+    addCounterJob(
+      buildSharedAnalyticsCounterKey(ANALYTICS_EVENT_TYPES.generateClicked, chartScope, bucket.bucketId || ""),
+      (value) => { chartBuckets[index].generateCount = value; }
+    );
+  });
+
+  const results = await Promise.allSettled(jobs.map((job) => job.promise));
+  let successCount = 0;
+  results.forEach((result, index) => {
+    if (result.status !== "fulfilled") return;
+    successCount += 1;
+    jobs[index].applyValue(Math.max(0, Number(result.value) || 0));
+  });
+
+  if (successCount === 0) {
+    throw new Error("Shared analytics unavailable");
+  }
+
+  const view = {
+    source: "shared",
+    sourceLabel: "Shared site analytics (all devices)",
+    summary,
+    chartData: buildAnalyticsChartDataFromBuckets(chartBuckets),
+    partial: successCount < jobs.length,
+  };
+
+  state.analyticsSharedCache[cacheKey] = {
+    fetchedAt: Date.now(),
+    data: view,
+  };
+
+  return view;
+}
+
+async function getUnifiedAnalyticsView(range, options = {}) {
+  try {
+    return await fetchSharedAnalyticsView(range, options);
+  } catch {
+    return buildLocalAnalyticsView(range);
+  }
+}
+
 function setAnalyticsRange(range) {
   const normalizedRange = normalize(range).toLowerCase();
   const supportedRanges = ["daily", "weekly", "monthly", "yearly"];
@@ -741,7 +1034,51 @@ function setAnalyticsRange(range) {
     btn.setAttribute("aria-pressed", isActive ? "true" : "false");
   });
 
-  renderAnalyticsUsageChart();
+  if (getActiveTabKey() === "analytics") {
+    void renderAnalyticsCounts();
+  }
+}
+
+function getSortedFeedbackEntries() {
+  return (FEEDBACK_ENTRIES || [])
+    .map((entry, index) => ({
+      ...entry,
+      _sortIndex: index,
+      _sortTs: Number.isFinite(new Date(entry?.receivedAt).getTime()) ? new Date(entry.receivedAt).getTime() : Infinity,
+    }))
+    .sort((a, b) => {
+      if (a._sortTs !== b._sortTs) return a._sortTs - b._sortTs;
+      return a._sortIndex - b._sortIndex;
+    });
+}
+
+function renderFeedbackSection() {
+  if (!feedbackListEl) return;
+
+  const entries = getSortedFeedbackEntries();
+  if (!entries.length) {
+    feedbackListEl.innerHTML = "";
+    if (feedbackEmptyEl) feedbackEmptyEl.hidden = false;
+    return;
+  }
+
+  if (feedbackEmptyEl) feedbackEmptyEl.hidden = true;
+  feedbackListEl.innerHTML = entries.map((entry) => {
+    const source = normalize(entry.source) || "Feedback";
+    const receivedDate = normalize(entry.receivedAt);
+    const formattedDate = receivedDate ? formatDate(receivedDate) : "Date not provided";
+    const comment = normalize(entry.comment);
+
+    return `
+      <article class="feedback-card" data-feedback-id="${escapeHtml(normalize(entry.id) || createId())}">
+        <div class="feedback-card-meta">
+          <span class="feedback-source">${escapeHtml(source)}</span>
+          <p class="feedback-date">${escapeHtml(formattedDate)}</p>
+        </div>
+        <p class="feedback-comment">"${escapeHtml(comment)}"</p>
+      </article>
+    `;
+  }).join("");
 }
 
 function formatAnalyticsBucketLabel(dateValue, range) {
@@ -772,6 +1109,7 @@ function buildAnalyticsBuckets(range, nowDate = new Date()) {
       buckets.push({
         startTs: start.getTime(),
         endTs: end.getTime(),
+        bucketId: getAnalyticsYearBucketId(start),
         label: formatAnalyticsBucketLabel(start, "yearly"),
         formCount: 0,
         generateCount: 0,
@@ -788,6 +1126,7 @@ function buildAnalyticsBuckets(range, nowDate = new Date()) {
       buckets.push({
         startTs: start.getTime(),
         endTs: end.getTime(),
+        bucketId: getAnalyticsWeekBucketId(start),
         label: formatAnalyticsBucketLabel(start, "weekly"),
         formCount: 0,
         generateCount: 0,
@@ -804,6 +1143,7 @@ function buildAnalyticsBuckets(range, nowDate = new Date()) {
       buckets.push({
         startTs: start.getTime(),
         endTs: end.getTime(),
+        bucketId: getAnalyticsMonthBucketId(start),
         label: formatAnalyticsBucketLabel(start, "monthly"),
         formCount: 0,
         generateCount: 0,
@@ -818,6 +1158,7 @@ function buildAnalyticsBuckets(range, nowDate = new Date()) {
     buckets.push({
       startTs: start.getTime(),
       endTs: end.getTime(),
+      bucketId: getAnalyticsDayBucketId(start),
       label: formatAnalyticsBucketLabel(start, "daily"),
       formCount: 0,
       generateCount: 0,
@@ -909,11 +1250,15 @@ function getAnalyticsLabelIndices(length) {
   return result;
 }
 
-function renderAnalyticsUsageChart() {
+function renderAnalyticsUsageChart(chartDataOverride = null) {
   if (!analyticsUsageChartEl) return;
 
   const range = state.analyticsRange || "daily";
-  const { buckets, maxCount, totalCount } = buildAnalyticsTimeSeries(range);
+  if (chartDataOverride) {
+    state.analyticsChartData = chartDataOverride;
+  }
+  const chartData = state.analyticsChartData || buildAnalyticsTimeSeries(range);
+  const { buckets, maxCount, totalCount } = chartData;
 
   if (totalCount === 0) {
     analyticsUsageChartEl.innerHTML = "";
@@ -1022,9 +1367,10 @@ function trackAnalyticsEvent(type) {
     { type, ts: Date.now() },
   ]);
   persistAnalyticsEvents();
+  void trackSharedAnalyticsEvent(type);
 
   if (getActiveTabKey() === "analytics") {
-    renderAnalyticsCounts();
+    void renderAnalyticsCounts({ force: true });
   }
 }
 
@@ -1051,22 +1397,40 @@ function countEventsTotal(type) {
   return events.filter((item) => item.type === type).length;
 }
 
-function renderAnalyticsCounts() {
+async function renderAnalyticsCounts({ force = false } = {}) {
   if (analyticsContentEl) analyticsContentEl.hidden = false;
-  const now = new Date();
-  const startOfTodayTs = startOfDay(now).getTime();
-  const startOfWeekTs = getStartOfWeek(now).getTime();
-  const startOfMonthTs = getStartOfMonth(now).getTime();
+  const requestId = state.analyticsRenderRequestId + 1;
+  state.analyticsRenderRequestId = requestId;
 
-  const formDaily = countEventsSince(ANALYTICS_EVENT_TYPES.formPageLoad, startOfTodayTs);
-  const formWeekly = countEventsSince(ANALYTICS_EVENT_TYPES.formPageLoad, startOfWeekTs);
-  const formMonthly = countEventsSince(ANALYTICS_EVENT_TYPES.formPageLoad, startOfMonthTs);
-  const formTotal = countEventsTotal(ANALYTICS_EVENT_TYPES.formPageLoad);
+  if (analyticsRefreshEl) {
+    analyticsRefreshEl.disabled = true;
+    analyticsRefreshEl.setAttribute("aria-disabled", "true");
+  }
 
-  const generateDaily = countEventsSince(ANALYTICS_EVENT_TYPES.generateClicked, startOfTodayTs);
-  const generateWeekly = countEventsSince(ANALYTICS_EVENT_TYPES.generateClicked, startOfWeekTs);
-  const generateMonthly = countEventsSince(ANALYTICS_EVENT_TYPES.generateClicked, startOfMonthTs);
-  const generateTotal = countEventsTotal(ANALYTICS_EVENT_TYPES.generateClicked);
+  let view = null;
+  try {
+    view = await getUnifiedAnalyticsView(state.analyticsRange || "daily", { force });
+  } catch {
+    view = buildLocalAnalyticsView(state.analyticsRange || "daily");
+  }
+
+  if (requestId !== state.analyticsRenderRequestId) {
+    if (analyticsRefreshEl) {
+      analyticsRefreshEl.disabled = false;
+      analyticsRefreshEl.setAttribute("aria-disabled", "false");
+    }
+    return;
+  }
+
+  const formDaily = Number(view?.summary?.form?.daily) || 0;
+  const formWeekly = Number(view?.summary?.form?.weekly) || 0;
+  const formMonthly = Number(view?.summary?.form?.monthly) || 0;
+  const formTotal = Number(view?.summary?.form?.total) || 0;
+
+  const generateDaily = Number(view?.summary?.generate?.daily) || 0;
+  const generateWeekly = Number(view?.summary?.generate?.weekly) || 0;
+  const generateMonthly = Number(view?.summary?.generate?.monthly) || 0;
+  const generateTotal = Number(view?.summary?.generate?.total) || 0;
 
   if (analyticsFormDailyEl) analyticsFormDailyEl.textContent = String(formDaily);
   if (analyticsFormWeeklyEl) analyticsFormWeeklyEl.textContent = String(formWeekly);
@@ -1079,8 +1443,21 @@ function renderAnalyticsCounts() {
 
   if (analyticsFormTotalEl) analyticsFormTotalEl.textContent = String(formTotal);
   if (analyticsGenerateTotalEl) analyticsGenerateTotalEl.textContent = String(generateTotal);
-  if (analyticsLastUpdatedEl) analyticsLastUpdatedEl.textContent = `Last updated: ${formatDateTime(new Date())}`;
-  renderAnalyticsUsageChart();
+
+  renderAnalyticsUsageChart(view?.chartData || buildAnalyticsTimeSeries(state.analyticsRange || "daily"));
+
+  const sourceLabel = normalize(view?.sourceLabel);
+  const partialLabel = view?.partial ? " (partial sync)" : "";
+  if (analyticsLastUpdatedEl) {
+    analyticsLastUpdatedEl.textContent = sourceLabel
+      ? `Last updated: ${formatDateTime(new Date())} | ${sourceLabel}${partialLabel}`
+      : `Last updated: ${formatDateTime(new Date())}`;
+  }
+
+  if (analyticsRefreshEl) {
+    analyticsRefreshEl.disabled = false;
+    analyticsRefreshEl.setAttribute("aria-disabled", "false");
+  }
 }
 
 function startGenerationLoader() {

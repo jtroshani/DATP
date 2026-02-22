@@ -482,6 +482,92 @@ h3 {
   margin: 0;
 }
 
+.feedback-section {
+  border: 1px solid #ccdded;
+  border-radius: 10px;
+  background: #fbfdff;
+  padding: 0.68rem;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.feedback-section-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.35rem 0.8rem;
+}
+
+.feedback-section-header h3 {
+  margin: 0;
+  font-size: 0.96rem;
+  color: #203f61;
+}
+
+.feedback-section-header p {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.feedback-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.feedback-card {
+  border: 1px solid #d5e3f0;
+  border-left: 4px solid #0033a1;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 0.62rem 0.68rem;
+  box-shadow: 0 2px 10px rgba(0, 51, 161, 0.05);
+  display: grid;
+  gap: 0.42rem;
+}
+
+.feedback-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.35rem 0.6rem;
+}
+
+.feedback-source {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #bfd2e5;
+  border-radius: 999px;
+  background: #eef5ff;
+  color: #1f4674;
+  padding: 0.14rem 0.5rem;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.feedback-date {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #58718c;
+}
+
+.feedback-comment {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: #1f334a;
+}
+
+.feedback-empty {
+  margin: 0;
+  border: 1px dashed #bfd2e5;
+  border-radius: 10px;
+  padding: 0.65rem;
+  text-align: center;
+  background: #ffffff;
+}
+
 .grid {
   display: grid;
   gap: 1rem;
