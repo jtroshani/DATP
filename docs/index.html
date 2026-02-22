@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Project Management Solution Builder</title>
-    <link rel="stylesheet" href="styles.css?v=20260222e" />
+    <link rel="stylesheet" href="styles.css?v=20260222f" />
   </head>
   <body>
     <div class="app-shell">
@@ -456,6 +456,23 @@
               </article>
             </div>
 
+            <section class="analytics-chart-card" aria-label="Usage over time">
+              <div class="analytics-chart-header">
+                <h3>Usage over time</h3>
+                <div class="analytics-range-toggle" role="group" aria-label="Usage chart range">
+                  <button type="button" class="analytics-range-btn active" data-analytics-range="daily" aria-pressed="true">Daily</button>
+                  <button type="button" class="analytics-range-btn" data-analytics-range="weekly" aria-pressed="false">Weekly</button>
+                  <button type="button" class="analytics-range-btn" data-analytics-range="monthly" aria-pressed="false">Monthly</button>
+                </div>
+              </div>
+              <ul class="analytics-chart-legend" aria-label="Usage chart legend">
+                <li><span class="legend-swatch legend-form" aria-hidden="true"></span>Form Page Loads</li>
+                <li><span class="legend-swatch legend-generate" aria-hidden="true"></span>Generate Solution Pack Clicked</li>
+              </ul>
+              <div class="analytics-chart-shell" id="analyticsUsageChart" role="img" aria-label="Usage over time chart"></div>
+              <p class="analytics-chart-empty" id="analyticsChartEmpty" hidden>No activity yet.</p>
+            </section>
+
             <div class="analytics-table-wrap">
               <table class="analytics-table" aria-label="Analytics usage counts">
                 <thead>
@@ -516,6 +533,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=20260222e"></script>
+    <script src="app.js?v=20260222f"></script>
   </body>
 </html>

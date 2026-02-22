@@ -83,6 +83,9 @@ const analyticsGenerateDailyEl = document.getElementById("analytics-generate-dai
 const analyticsGenerateWeeklyEl = document.getElementById("analytics-generate-weekly");
 const analyticsGenerateMonthlyEl = document.getElementById("analytics-generate-monthly");
 const analyticsGenerateTotalCellEl = document.getElementById("analytics-generate-total");
+const analyticsUsageChartEl = document.getElementById("analyticsUsageChart");
+const analyticsChartEmptyEl = document.getElementById("analyticsChartEmpty");
+const analyticsRangeBtns = document.querySelectorAll(".analytics-range-btn");
 const requiredIntakeFields = intakeForm
   ? Array.from(intakeForm.querySelectorAll("input[required], textarea[required], select[required]"))
   : [];
@@ -108,6 +111,7 @@ const state = {
   retentionWarningShown: false,
   isGenerating: false,
   generationToken: 0,
+  analyticsRange: "daily",
   aiConfig: {
     mode: "local",
     model: "local-heuristic-v2",
@@ -312,6 +316,7 @@ init();
 function init() {
   followupQuestionsEl.classList.add("hidden");
   syncAIControls(true);
+  setAnalyticsRange(state.analyticsRange);
   initializeIntakeValidation();
   attachEventHandlers();
   setActiveTab("intake");
@@ -347,6 +352,19 @@ function attachEventHandlers() {
       renderAnalyticsCounts();
     });
   }
+
+  if (analyticsRangeBtns.length) {
+    analyticsRangeBtns.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        setAnalyticsRange(btn.dataset.analyticsRange || "daily");
+      });
+    });
+  }
+
+  window.addEventListener("resize", () => {
+    if (getActiveTabKey() !== "analytics") return;
+    renderAnalyticsUsageChart();
+  });
 
   solutionSubTabs.forEach((tab) => {
     tab.addEventListener("click", () => {
@@ -711,6 +729,241 @@ function waitMs(ms) {
   });
 }
 
+function setAnalyticsRange(range) {
+  const normalizedRange = normalize(range).toLowerCase();
+  const supportedRanges = ["daily", "weekly", "monthly"];
+  state.analyticsRange = supportedRanges.includes(normalizedRange) ? normalizedRange : "daily";
+
+  analyticsRangeBtns.forEach((btn) => {
+    const isActive = normalize(btn.dataset.analyticsRange).toLowerCase() === state.analyticsRange;
+    btn.classList.toggle("active", isActive);
+    btn.setAttribute("aria-pressed", isActive ? "true" : "false");
+  });
+
+  renderAnalyticsUsageChart();
+}
+
+function formatAnalyticsBucketLabel(dateValue, range) {
+  const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return "";
+
+  if (range === "monthly") {
+    return date.toLocaleDateString(undefined, { month: "short", year: "2-digit" });
+  }
+
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function buildAnalyticsBuckets(range, nowDate = new Date()) {
+  const buckets = [];
+  const now = startOfDay(nowDate);
+
+  if (range === "weekly") {
+    const weekStart = getStartOfWeek(now);
+    for (let offset = 11; offset >= 0; offset -= 1) {
+      const start = addDays(weekStart, -7 * offset);
+      const end = addDays(start, 7);
+      buckets.push({
+        startTs: start.getTime(),
+        endTs: end.getTime(),
+        label: formatAnalyticsBucketLabel(start, "weekly"),
+        formCount: 0,
+        generateCount: 0,
+      });
+    }
+    return buckets;
+  }
+
+  if (range === "monthly") {
+    const monthStart = getStartOfMonth(now);
+    for (let offset = 11; offset >= 0; offset -= 1) {
+      const start = new Date(monthStart.getFullYear(), monthStart.getMonth() - offset, 1);
+      const end = new Date(start.getFullYear(), start.getMonth() + 1, 1);
+      buckets.push({
+        startTs: start.getTime(),
+        endTs: end.getTime(),
+        label: formatAnalyticsBucketLabel(start, "monthly"),
+        formCount: 0,
+        generateCount: 0,
+      });
+    }
+    return buckets;
+  }
+
+  for (let offset = 13; offset >= 0; offset -= 1) {
+    const start = addDays(now, -offset);
+    const end = addDays(start, 1);
+    buckets.push({
+      startTs: start.getTime(),
+      endTs: end.getTime(),
+      label: formatAnalyticsBucketLabel(start, "daily"),
+      formCount: 0,
+      generateCount: 0,
+    });
+  }
+
+  return buckets;
+}
+
+function buildAnalyticsTimeSeries(range) {
+  const buckets = buildAnalyticsBuckets(range);
+  const events = state.analyticsEvents || [];
+
+  if (!buckets.length || !events.length) {
+    return {
+      buckets,
+      maxCount: 0,
+      totalCount: 0,
+    };
+  }
+
+  const firstStart = buckets[0].startTs;
+  const lastEnd = buckets[buckets.length - 1].endTs;
+
+  events.forEach((item) => {
+    const ts = Number(item?.ts);
+    if (!Number.isFinite(ts)) return;
+    if (ts < firstStart || ts >= lastEnd) return;
+
+    const bucket = buckets.find((point) => ts >= point.startTs && ts < point.endTs);
+    if (!bucket) return;
+
+    if (item.type === ANALYTICS_EVENT_TYPES.formPageLoad) {
+      bucket.formCount += 1;
+      return;
+    }
+
+    if (item.type === ANALYTICS_EVENT_TYPES.generateClicked) {
+      bucket.generateCount += 1;
+    }
+  });
+
+  const maxCount = buckets.reduce(
+    (currentMax, point) => Math.max(currentMax, point.formCount, point.generateCount),
+    0
+  );
+  const totalCount = buckets.reduce(
+    (sum, point) => sum + point.formCount + point.generateCount,
+    0
+  );
+
+  return {
+    buckets,
+    maxCount,
+    totalCount,
+  };
+}
+
+function getAnalyticsAxisScale(maxCount) {
+  const safeMax = Math.max(0, Number(maxCount) || 0);
+  if (safeMax <= 4) {
+    return {
+      axisMax: 4,
+      step: 1,
+    };
+  }
+
+  const step = Math.max(1, Math.ceil(safeMax / 4));
+  return {
+    axisMax: step * 4,
+    step,
+  };
+}
+
+function getAnalyticsLabelIndices(length) {
+  if (length <= 0) return [];
+  if (length <= 6) {
+    return Array.from({ length }, (_, index) => index);
+  }
+
+  const labelSlots = 6;
+  const result = [];
+  for (let slot = 0; slot < labelSlots; slot += 1) {
+    const index = Math.round((slot * (length - 1)) / (labelSlots - 1));
+    if (!result.includes(index)) {
+      result.push(index);
+    }
+  }
+  return result;
+}
+
+function renderAnalyticsUsageChart() {
+  if (!analyticsUsageChartEl) return;
+
+  const range = state.analyticsRange || "daily";
+  const { buckets, maxCount, totalCount } = buildAnalyticsTimeSeries(range);
+
+  if (totalCount === 0) {
+    analyticsUsageChartEl.innerHTML = "";
+    analyticsUsageChartEl.setAttribute("aria-label", "No activity yet.");
+    if (analyticsChartEmptyEl) analyticsChartEmptyEl.hidden = false;
+    return;
+  }
+
+  if (analyticsChartEmptyEl) analyticsChartEmptyEl.hidden = true;
+
+  const width = 960;
+  const height = 260;
+  const margin = { top: 16, right: 18, bottom: 44, left: 44 };
+  const innerWidth = width - margin.left - margin.right;
+  const innerHeight = height - margin.top - margin.bottom;
+  const xStep = buckets.length > 1 ? innerWidth / (buckets.length - 1) : 0;
+  const { axisMax, step } = getAnalyticsAxisScale(maxCount);
+  const labelIndices = new Set(getAnalyticsLabelIndices(buckets.length));
+
+  const xFor = (index) => margin.left + xStep * index;
+  const yFor = (value) => margin.top + innerHeight - (Math.max(0, value) / axisMax) * innerHeight;
+  const formatPoint = (point, index, key) => `${xFor(index).toFixed(2)},${yFor(point[key]).toFixed(2)}`;
+
+  const yTicks = [];
+  for (let value = 0; value <= axisMax; value += step) {
+    yTicks.push(value);
+  }
+
+  const gridLines = yTicks.map((value) => {
+    const y = yFor(value).toFixed(2);
+    return `
+      <line class="analytics-grid-line" x1="${margin.left}" y1="${y}" x2="${width - margin.right}" y2="${y}"></line>
+      <text class="analytics-axis-label" x="${margin.left - 8}" y="${Number(y) + 4}" text-anchor="end">${value}</text>
+    `;
+  }).join("");
+
+  const xLabels = buckets.map((point, index) => {
+    if (!labelIndices.has(index)) return "";
+    return `<text class="analytics-axis-label" x="${xFor(index).toFixed(2)}" y="${height - 14}" text-anchor="middle">${escapeHtml(point.label)}</text>`;
+  }).join("");
+
+  const formLine = buckets.map((point, index) => formatPoint(point, index, "formCount")).join(" ");
+  const generateLine = buckets.map((point, index) => formatPoint(point, index, "generateCount")).join(" ");
+  const formPoints = buckets.map((point, index) => {
+    const x = xFor(index).toFixed(2);
+    const y = yFor(point.formCount).toFixed(2);
+    return `<circle class="analytics-point-form" cx="${x}" cy="${y}" r="2.8"></circle>`;
+  }).join("");
+  const generatePoints = buckets.map((point, index) => {
+    const x = xFor(index).toFixed(2);
+    const y = yFor(point.generateCount).toFixed(2);
+    return `<circle class="analytics-point-generate" cx="${x}" cy="${y}" r="2.8"></circle>`;
+  }).join("");
+
+  analyticsUsageChartEl.setAttribute(
+    "aria-label",
+    `Usage over time (${range}) for form page loads and Generate Solution Pack clicks.`
+  );
+  analyticsUsageChartEl.innerHTML = `
+    <svg class="analytics-usage-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+      <line class="analytics-axis-line" x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${height - margin.bottom}"></line>
+      <line class="analytics-axis-line" x1="${margin.left}" y1="${height - margin.bottom}" x2="${width - margin.right}" y2="${height - margin.bottom}"></line>
+      ${gridLines}
+      <polyline class="analytics-series-form" points="${formLine}"></polyline>
+      <polyline class="analytics-series-generate" points="${generateLine}"></polyline>
+      ${formPoints}
+      ${generatePoints}
+      ${xLabels}
+    </svg>
+  `;
+}
+
 function loadAnalyticsEvents() {
   try {
     const raw = localStorage.getItem(ANALYTICS_STORAGE_KEY);
@@ -806,6 +1059,7 @@ function renderAnalyticsCounts() {
   if (analyticsFormTotalEl) analyticsFormTotalEl.textContent = String(formTotal);
   if (analyticsGenerateTotalEl) analyticsGenerateTotalEl.textContent = String(generateTotal);
   if (analyticsLastUpdatedEl) analyticsLastUpdatedEl.textContent = `Last updated: ${formatDateTime(new Date())}`;
+  renderAnalyticsUsageChart();
 }
 
 function startGenerationLoader() {
