@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Project Management Solution Builder</title>
-    <link rel="stylesheet" href="styles.css?v=20260222i" />
+    <link rel="stylesheet" href="styles.css?v=20260222j" />
   </head>
   <body>
     <div class="app-shell">
@@ -48,7 +48,7 @@
         <button class="tab-btn active" id="tabbtn-intake" data-tab="intake" role="tab" aria-selected="true" aria-controls="tab-intake" type="button">Intake</button>
         <button class="tab-btn" id="tabbtn-solution" data-tab="solution" role="tab" aria-selected="false" aria-controls="tab-solution" type="button">Solution Pack</button>
         <button class="tab-btn" id="tabbtn-history" data-tab="history" role="tab" aria-selected="false" aria-controls="tab-history" type="button">Version History</button>
-        <button class="tab-btn" id="tabbtn-analytics" data-tab="analytics" role="tab" aria-selected="false" aria-controls="tab-analytics" type="button">Analytics</button>
+        <button class="tab-btn" id="tabbtn-analytics" data-tab="analytics" role="tab" aria-selected="false" aria-controls="tab-analytics" type="button">Feedback</button>
       </nav>
 
       <main>
@@ -430,87 +430,18 @@
         </section>
 
         <section class="tab-panel" id="tab-analytics" role="tabpanel" tabindex="0" aria-labelledby="tabbtn-analytics">
-          <div class="analytics-header">
-            <h2>Analytics</h2>
-            <p class="helper-text">Public usage metrics shared across devices for this deployed site. Counts only: form page loads and Generate Solution Pack clicks.</p>
-          </div>
-
-          <div class="analytics-content" id="analyticsContent">
-            <div class="analytics-toolbar">
-              <p class="helper-text">No intake content, names, emails, or personal data are collected.</p>
-              <div class="analytics-toolbar-actions">
-                <button type="button" class="secondary-btn" id="analyticsRefresh">Refresh</button>
-              </div>
+          <div class="feedback-panel-shell">
+            <div class="feedback-panel-header">
+              <h2>Feedback</h2>
+              <p class="helper-text">
+                A running list of feedback entries shown in chronological order. Each item is added manually as feedback is received.
+              </p>
             </div>
-            <p class="helper-text analytics-tracking-info" id="analyticsTrackingInfo"></p>
-
-            <div class="analytics-summary-grid">
-              <article class="analytics-summary-card">
-                <p class="analytics-summary-label">Form Page Loads</p>
-                <p class="analytics-summary-value" id="analyticsFormTotal">0</p>
-                <p class="analytics-summary-meta">Total tracked</p>
-              </article>
-              <article class="analytics-summary-card">
-                <p class="analytics-summary-label">Generate Clicked</p>
-                <p class="analytics-summary-value" id="analyticsGenerateTotal">0</p>
-                <p class="analytics-summary-meta">Total tracked</p>
-              </article>
-            </div>
-
-            <section class="analytics-chart-card" aria-label="Usage over time">
-              <div class="analytics-chart-header">
-                <h3>Usage over time</h3>
-                <div class="analytics-range-toggle" role="group" aria-label="Usage chart range">
-                  <button type="button" class="analytics-range-btn active" data-analytics-range="daily" aria-pressed="true">Daily</button>
-                  <button type="button" class="analytics-range-btn" data-analytics-range="weekly" aria-pressed="false">Weekly</button>
-                  <button type="button" class="analytics-range-btn" data-analytics-range="monthly" aria-pressed="false">Monthly</button>
-                  <button type="button" class="analytics-range-btn" data-analytics-range="yearly" aria-pressed="false">Yearly</button>
-                </div>
-              </div>
-              <ul class="analytics-chart-legend" aria-label="Usage chart legend">
-                <li><span class="legend-swatch legend-form" aria-hidden="true"></span>Form Page Loads</li>
-                <li><span class="legend-swatch legend-generate" aria-hidden="true"></span>Generate Solution Pack Clicked</li>
-              </ul>
-              <div class="analytics-chart-shell" id="analyticsUsageChart" role="img" aria-label="Usage over time chart"></div>
-              <p class="analytics-chart-empty" id="analyticsChartEmpty" hidden>No activity yet.</p>
-            </section>
-
-            <div class="analytics-table-wrap">
-              <table class="analytics-table" aria-label="Analytics usage counts">
-                <thead>
-                  <tr>
-                    <th scope="col">Event</th>
-                    <th scope="col">Daily</th>
-                    <th scope="col">Weekly</th>
-                    <th scope="col">Monthly</th>
-                    <th scope="col">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <th scope="row">Form page loads</th>
-                    <td id="analytics-form-daily">0</td>
-                    <td id="analytics-form-weekly">0</td>
-                    <td id="analytics-form-monthly">0</td>
-                    <td id="analytics-form-total">0</td>
-                  </tr>
-                  <tr>
-                    <th scope="row">Generate Solution Pack clicked</th>
-                    <td id="analytics-generate-daily">0</td>
-                    <td id="analytics-generate-weekly">0</td>
-                    <td id="analytics-generate-monthly">0</td>
-                    <td id="analytics-generate-total">0</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <p id="analyticsLastUpdated" class="helper-text analytics-last-updated"></p>
 
             <section class="feedback-section" id="feedbackSection" aria-label="User feedback">
               <div class="feedback-section-header">
-                <h3>Feedback</h3>
-                <p class="helper-text">User comments shown in chronological order.</p>
+                <h3>Feedback entries</h3>
+                <p class="helper-text">Comment and date for quick review.</p>
               </div>
               <div class="feedback-list" id="feedbackList"></div>
               <p class="feedback-empty helper-text" id="feedbackEmpty" hidden>No feedback yet.</p>
@@ -544,6 +475,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=20260222l"></script>
+    <script src="app.js?v=20260222m"></script>
   </body>
 </html>

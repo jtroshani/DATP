@@ -145,6 +145,7 @@ const SIMPLE_AI_DEFAULTS = {
 
 const STATUS_PHASES = ["Initiation", "Planning", "Execution", "M&C", "Closure"];
 
+// Append new feedback entries here (chronological sorting is handled in renderFeedbackSection()).
 const FEEDBACK_ENTRIES = [
   {
     id: "feedback-2026-02-22-tpb-1",
@@ -1435,6 +1436,15 @@ function countEventsTotal(type) {
 }
 
 async function renderAnalyticsCounts({ force = false } = {}) {
+  const hasAnalyticsDisplay = Boolean(
+    analyticsContentEl ||
+    analyticsFormTotalEl ||
+    analyticsGenerateTotalEl ||
+    analyticsUsageChartEl ||
+    analyticsLastUpdatedEl
+  );
+  if (!hasAnalyticsDisplay) return;
+
   if (analyticsContentEl) analyticsContentEl.hidden = false;
   const requestId = state.analyticsRenderRequestId + 1;
   state.analyticsRenderRequestId = requestId;
