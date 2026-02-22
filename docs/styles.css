@@ -72,6 +72,27 @@ body {
   gap: 0.72rem;
 }
 
+.logo-home-btn {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  line-height: 0;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.logo-home-btn:hover {
+  cursor: pointer;
+}
+
+.logo-home-btn:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
 .header-logo {
   width: clamp(44px, 4.6vw, 58px);
   height: auto;

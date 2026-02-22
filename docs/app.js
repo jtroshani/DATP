@@ -61,6 +61,7 @@ const aiSuggestIntakeEl = document.getElementById("aiSuggestIntake");
 const aiAssistStatusEl = document.getElementById("aiAssistStatus");
 const generationLoaderEl = document.getElementById("generationLoader");
 const loaderProgressFillEl = document.getElementById("loaderProgressFill");
+const logoHomeBtnEl = document.getElementById("logoHomeBtn");
 
 const sectionEls = {
   sectionA: document.getElementById("sectionA"),
@@ -303,6 +304,13 @@ function attachEventHandlers() {
   tabs.forEach((tab) => {
     tab.addEventListener("click", () => setActiveTab(tab.dataset.tab));
   });
+
+  if (logoHomeBtnEl) {
+    logoHomeBtnEl.addEventListener("click", () => {
+      setActiveTab("intake");
+      scrollToIntakeTop();
+    });
+  }
 
   solutionSubTabs.forEach((tab) => {
     tab.addEventListener("click", () => {
@@ -584,6 +592,14 @@ function scrollToSolutionPackTop() {
   window.requestAnimationFrame(() => {
     const targetTop = panels.solution.getBoundingClientRect().top + window.scrollY;
     window.scrollTo({ top: Math.max(0, targetTop - 6), left: 0, behavior: "auto" });
+  });
+}
+
+function scrollToIntakeTop() {
+  if (!panels.intake) return;
+  window.requestAnimationFrame(() => {
+    const targetTop = panels.intake.getBoundingClientRect().top + window.scrollY;
+    window.scrollTo({ top: Math.max(0, targetTop - 6), left: 0, behavior: "smooth" });
   });
 }
 
