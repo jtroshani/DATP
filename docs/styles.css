@@ -42,7 +42,7 @@ body {
   margin: 0;
   font-family: "IBM Plex Sans", "Avenir Next", "Helvetica Neue", sans-serif;
   color: var(--neutral-900);
-  background: linear-gradient(160deg, #f8fbff 0%, #eef3f9 100%);
+  background: #ffffff;
   line-height: 1.5;
 }
 
@@ -59,6 +59,25 @@ body {
   align-items: flex-start;
   gap: 1rem;
   margin-bottom: 1.2rem;
+}
+
+.header-copy {
+  flex: 1 1 620px;
+  min-width: 0;
+}
+
+.eyebrow-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.72rem;
+}
+
+.header-logo {
+  width: clamp(44px, 4.6vw, 58px);
+  height: auto;
+  display: block;
+  flex: 0 0 auto;
+  object-fit: contain;
 }
 
 .eyebrow {
@@ -1649,6 +1668,10 @@ body.is-loading-solution {
     gap: 0.85rem;
   }
 
+  .header-copy {
+    flex-basis: auto;
+  }
+
   .two-col {
     grid-template-columns: 1fr;
   }
@@ -1909,6 +1932,16 @@ body.is-loading-solution {
 @media (max-width: 640px) {
   .app-shell {
     padding: 1rem 0.6rem 1.1rem;
+  }
+
+  .eyebrow-wrap {
+    align-items: flex-start;
+    gap: 0.55rem;
+  }
+
+  .header-logo {
+    width: 44px;
+    margin-top: 0.04rem;
   }
 
   .eyebrow-main {
