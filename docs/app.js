@@ -1748,6 +1748,7 @@ function buildSolutionPack(intake, complexity, followups, aiConfig = { mode: "lo
   const timeline = buildTimelineData(context);
   const workMatrix = buildWorkMatrix(intake, context, timeline);
   const workstreams = buildWorkstreamsData(intake, context);
+  context.failureDriverReview = buildFailureDriverReview(intake, context, followups, timeline, workMatrix);
   const cloudReady = isCloudMode(aiConfig) && isAIProviderConfigured(aiConfig);
   const effectiveMode = cloudReady ? "cloud" : "local";
   const providerLabel = cloudReady
@@ -1923,10 +1924,546 @@ function buildContext(intake, complexity, submissionTimestamp) {
     timelineEndLabel,
     checkpointPlan,
     recommendationBias: "plan",
+    complexityLabel: complexity || "Standard",
     ownerLabel: intake.ownerName && intake.ownerArea
       ? `${intake.ownerName} (${intake.ownerArea})`
       : "Sponsor to be confirmed",
   };
+}
+
+function hasMeasurableLanguage(text) {
+  const value = normalize(text);
+  if (!value) return false;
+  return /\b\d+[%]?\b|reduce|increase|decrease|improve|within|from\s+\d+|to\s+\d+/i.test(value);
+}
+
+function countTbdSignals(intake) {
+  const combined = [
+    intake?.projectGoal,
+    intake?.problem,
+    ...(intake?.outcomes || []),
+    ...(intake?.stakeholders || []),
+    ...(intake?.systems || []),
+    ...(intake?.risks || []),
+    intake?.constraints?.budget,
+    intake?.constraints?.staffing,
+    intake?.constraints?.compliance,
+    intake?.constraints?.tech,
+  ].join(" ");
+
+  const matches = combined.match(/\b(tbd|unknown|undecided|to be determined|to be confirmed|later)\b/gi);
+  return matches ? matches.length : 0;
+}
+
+function parseStaffingRoleCoverage(staffingText) {
+  const text = normalize(staffingText).toLowerCase();
+  return {
+    hasStaffing: Boolean(text),
+    pm: /\b(pm|project manager)\b/.test(text),
+    ba: /\b(ba|business analyst|analyst|product owner)\b/.test(text),
+    tech: /\b(tech lead|developer|engineer|architect|systems analyst|iam engineer)\b/.test(text),
+    sme: /\b(sme|subject matter|advisor|faculty|operations lead|compliance|security)\b/.test(text),
+    training: /\b(training|change|communications?|comms)\b/.test(text),
+    limited: /\b(limited|no new hires|existing teams only|capacity constrained|as needed)\b/.test(text),
+    inexperienceSignal: /\b(new team|first time|limited experience|learning|ramp-?up|inexperienced)\b/.test(text),
+  };
+}
+
+function hasStaffingRole(roleCoverage, roleKey) {
+  if (!roleCoverage) return false;
+  if (roleKey === "sponsor") return false;
+  return Boolean(roleCoverage[roleKey]);
+}
+
+function resolveFailureDriverOwner(intake, context, roleCoverage, candidates = [], fallbackRole = "Project Manager") {
+  const sponsorAvailable = Boolean(normalize(intake?.ownerName));
+  const sponsorLabel = sponsorAvailable
+    ? `Project Sponsor (${context?.ownerLabel || intake.ownerName})`
+    : "Project Sponsor";
+
+  for (const candidate of candidates) {
+    if (candidate === "sponsor" && sponsorAvailable) {
+      return {
+        owner: sponsorLabel,
+        ownerNeedsConfirmation: false,
+      };
+    }
+    if (candidate === "pm" && hasStaffingRole(roleCoverage, "pm")) {
+      return { owner: "Project Manager", ownerNeedsConfirmation: false };
+    }
+    if (candidate === "ba" && hasStaffingRole(roleCoverage, "ba")) {
+      return { owner: "Business Analyst / Product Owner", ownerNeedsConfirmation: false };
+    }
+    if (candidate === "tech" && hasStaffingRole(roleCoverage, "tech")) {
+      return { owner: "Tech Lead", ownerNeedsConfirmation: false };
+    }
+    if (candidate === "sme" && hasStaffingRole(roleCoverage, "sme")) {
+      return { owner: "SME Lead", ownerNeedsConfirmation: false };
+    }
+    if (candidate === "training" && hasStaffingRole(roleCoverage, "training")) {
+      return { owner: "Training / Change Lead", ownerNeedsConfirmation: false };
+    }
+  }
+
+  const fallback = fallbackRole === "Project Sponsor" ? "Project Sponsor" : "Project Manager";
+  return {
+    owner: `${fallback} (Owner not provided in intake—confirm)`,
+    ownerNeedsConfirmation: true,
+  };
+}
+
+function getRiskAwarenessSectionTitle(sectionKey) {
+  if (sectionKey === "sectionA") return "Executive summary";
+  if (sectionKey === "sectionB") return "Governance + decision model";
+  if (sectionKey === "sectionC") return "Process model + mapping";
+  if (sectionKey === "sectionD") return "Planning deliverables";
+  if (sectionKey === "sectionE") return "Execution + accountability";
+  if (sectionKey === "sectionF") return "Expert collaboration recommendations";
+  if (sectionKey === "sectionG") return "Next steps";
+  if (sectionKey === "sectionH") return "AI insights and recommendations";
+  return "Solution Pack";
+}
+
+function finalizeFailureDriverEvaluation(rawEval) {
+  const sectionActions = rawEval.sectionActions || {};
+  const whereReflected = Object.keys(sectionActions).map((key) => getRiskAwarenessSectionTitle(key));
+  return {
+    key: rawEval.key,
+    label: rawEval.label,
+    level: rawEval.level || "Low",
+    rationale: rawEval.rationale || "No elevated risk signal detected from intake.",
+    owner: rawEval.owner || "Project Manager (Owner not provided in intake—confirm)",
+    ownerNeedsConfirmation: Boolean(rawEval.ownerNeedsConfirmation),
+    mitigations: Array.isArray(rawEval.mitigations) ? rawEval.mitigations : [],
+    sectionActions,
+    whereReflected,
+    missingInputs: Array.isArray(rawEval.missingInputs) ? rawEval.missingInputs.filter(Boolean) : [],
+    minimumNextStep: normalize(rawEval.minimumNextStep),
+    followUpOwner: rawEval.followUpOwner || (rawEval.missingInputs?.length ? "Project Manager" : ""),
+  };
+}
+
+function buildFailureDriverReview(intake, context, followups = [], timeline = [], workMatrix = []) {
+  const roleCoverage = parseStaffingRoleCoverage(intake?.constraints?.staffing || "");
+  const tbdSignals = countTbdSignals(intake);
+  const goalMeasured = hasMeasurableLanguage(intake.projectGoal) || intake.outcomes.some((outcome) => hasMeasurableLanguage(outcome));
+  const outcomesCount = intake.outcomes.length;
+  const stakeholdersCount = intake.stakeholders.length;
+  const systemsCount = intake.systems.length;
+  const risksCount = intake.risks.length;
+  const sponsorNamed = Boolean(normalize(intake.ownerName));
+  const sponsorAreaNamed = Boolean(normalize(intake.ownerArea));
+  const problemLen = normalize(intake.problem).length;
+  const techText = normalize(intake.constraints.tech).toLowerCase();
+  const techMissing = !normalize(intake.constraints.tech) && systemsCount === 0;
+  const techUndecided = /\b(tbd|undecid|to be confirmed|to be determined|unknown|evaluate|selection pending)\b/i.test(techText);
+  const dependencyDetailWeak = systemsCount === 0 && risksCount === 0;
+  const timelineItems = normalizeMilestones(context.milestones || timeline || []);
+  const firstMilestone = timelineItems[0];
+  const lastMilestone = timelineItems[timelineItems.length - 1];
+  const daysToGoLive = intake.goLiveDate ? daysBetween(new Date(), intake.goLiveDate) : null;
+  const aggressiveTarget = daysToGoLive !== null && (
+    (context.urgencyProfile === "Critical" && daysToGoLive < 60) ||
+    (context.urgencyProfile === "High" && daysToGoLive < 75) ||
+    (context.urgencyProfile === "Moderate" && daysToGoLive < 45)
+  );
+  const scenarioText = `${context.scenarioType} ${intake.projectGoal} ${intake.problem}`.toLowerCase();
+  const technologyScenario = /technology|system|integration|platform|data/.test(scenarioText);
+  const policyScenario = /policy|compliance|governance|legal/.test(scenarioText);
+  const highComplexity = /enterprise/i.test(context.complexityLabel || "");
+  const standardOrHigher = /standard|enterprise/i.test(context.complexityLabel || "");
+  const roleCount = ["pm", "ba", "tech", "sme", "training"].filter((key) => roleCoverage[key]).length;
+
+  const evaluations = [];
+
+  const addDriver = (driver) => {
+    evaluations.push(finalizeFailureDriverEvaluation(driver));
+  };
+
+  {
+    const missingInputs = [];
+    if (!intake.projectGoal) missingInputs.push("One-sentence goal");
+    if (!outcomesCount) missingInputs.push("Desired outcomes");
+    if (!stakeholdersCount) missingInputs.push("Stakeholders");
+    const ownerInfo = resolveFailureDriverOwner(intake, context, roleCoverage, ["sponsor", "pm"], "Project Sponsor");
+    const level = (!intake.projectGoal || stakeholdersCount === 0 || outcomesCount === 0)
+      ? "High"
+      : (stakeholdersCount < 2 || outcomesCount < 2 || !sponsorAreaNamed ? "Medium" : "Low");
+    const rationale = level === "High"
+      ? "Goal, outcomes, or stakeholder coverage is missing, which increases alignment and expectation gaps across teams."
+      : level === "Medium"
+        ? "Stakeholder coverage or outcome detail is limited, so alignment may drift during planning and execution."
+        : "Goal, outcomes, and stakeholder signals support alignment planning.";
+    addDriver({
+      key: "poor_alignment",
+      label: "Poor alignment",
+      level,
+      rationale,
+      owner: ownerInfo.owner,
+      ownerNeedsConfirmation: ownerInfo.ownerNeedsConfirmation,
+      mitigations: [
+        "Add a stakeholder alignment checkpoint at kickoff and before Phase 2 decisions.",
+        "Track decisions and tradeoffs in a decision log with owner + due date.",
+      ],
+      sectionActions: level === "Low" ? {} : {
+        sectionB: ["Stakeholder alignment checkpoint and decision-log review cadence added to governance touchpoints."],
+        sectionG: ["Kickoff alignment session and sponsor/PM confirmation added to next-week checklist."],
+      },
+      missingInputs,
+      minimumNextStep: missingInputs.length
+        ? "Confirm goal statement, top outcomes, and stakeholder groups before baseline approval."
+        : "",
+      followUpOwner: missingInputs.length ? "Project Manager" : "",
+    });
+  }
+
+  {
+    const missingInputs = [];
+    if (!intake.goLiveDate) missingInputs.push("Target go-live date");
+    if (dependencyDetailWeak) missingInputs.push("Dependency detail (systems/risks/dependency constraints)");
+    const ownerInfo = resolveFailureDriverOwner(intake, context, roleCoverage, ["pm"], "Project Manager");
+    const level = (aggressiveTarget && (dependencyDetailWeak || !intake.goLiveDate))
+      ? "High"
+      : (!intake.goLiveDate || dependencyDetailWeak || context.urgencyProfile === "Critical" ? "Medium" : "Low");
+    const rationale = level === "High"
+      ? "Timeline is aggressive and dependency details are weak/missing, increasing planning failure risk."
+      : level === "Medium"
+        ? "Some planning inputs are incomplete (target date and/or dependencies), so milestone assumptions need confirmation."
+        : "Target timing and dependency signals support a stable initial planning baseline.";
+    addDriver({
+      key: "bad_planning",
+      label: "Bad planning",
+      level,
+      rationale,
+      owner: ownerInfo.owner,
+      ownerNeedsConfirmation: ownerInfo.ownerNeedsConfirmation,
+      mitigations: [
+        "Run a milestone and dependency checkpoint to confirm critical path assumptions.",
+        "Validate owner + due date for top dependencies before phase baseline approval.",
+      ],
+      sectionActions: level === "Low" ? {} : {
+        sectionD: ["Milestone/dependency checkpoint added to planning deliverables and checkpoint schedule."],
+        sectionG: ["Dependency tracker baseline and milestone review added to next steps."],
+      },
+      missingInputs,
+      minimumNextStep: missingInputs.length
+        ? "Confirm target completion date and name the top 3 dependencies with owners."
+        : "",
+      followUpOwner: missingInputs.length ? "Project Manager" : "",
+    });
+  }
+
+  {
+    const missingInputs = [];
+    if (!sponsorNamed) missingInputs.push("Business owner / sponsor (name)");
+    if (!sponsorAreaNamed) missingInputs.push("Business area");
+    const ownerInfo = resolveFailureDriverOwner(intake, context, roleCoverage, ["sponsor"], "Project Sponsor");
+    const level = !sponsorNamed ? "High" : (!sponsorAreaNamed ? "Medium" : "Low");
+    const rationale = level === "High"
+      ? "No sponsor/decision authority is named in intake, which creates escalation and approval risk."
+      : level === "Medium"
+        ? "Sponsor is named but business ownership context is incomplete, which may slow executive decisions."
+        : "Sponsor/owner information is present and can support executive decision cadence.";
+    addDriver({
+      key: "lack_executive_support",
+      label: "Lack of executive support",
+      level,
+      rationale,
+      owner: ownerInfo.owner,
+      ownerNeedsConfirmation: ownerInfo.ownerNeedsConfirmation,
+      mitigations: [
+        "Add explicit sponsor touchpoints and escalation path timing to governance cadence.",
+        "Require sponsor confirmation on scope, tradeoffs, and launch readiness gates.",
+      ],
+      sectionActions: level === "Low" ? {} : {
+        sectionB: ["Sponsor touchpoints and escalation path reinforcement added to governance model."],
+      },
+      missingInputs,
+      minimumNextStep: missingInputs.length
+        ? "Confirm the named sponsor and decision authority before kickoff."
+        : "",
+      followUpOwner: missingInputs.length ? "Project Manager" : "",
+    });
+  }
+
+  {
+    const missingInputs = [];
+    if (!intake.problem) missingInputs.push("Problem / opportunity details");
+    if (!outcomesCount) missingInputs.push("Desired outcomes");
+    if (tbdSignals > 0) missingInputs.push("TBD/undecided placeholders in intake");
+    const ownerInfo = resolveFailureDriverOwner(intake, context, roleCoverage, ["ba", "sme", "pm"], "Project Manager");
+    const vagueRequirements = problemLen < 90 || outcomesCount < 2 || tbdSignals >= 2;
+    const level = (!intake.problem || outcomesCount === 0 || tbdSignals >= 3)
+      ? "High"
+      : (vagueRequirements ? "Medium" : "Low");
+    const rationale = level === "High"
+      ? "Requirements signals are incomplete or highly tentative, increasing rework risk."
+      : level === "Medium"
+        ? "Problem/outcome detail is limited, so requirements need early validation before design/build."
+        : "Problem and outcome details provide a workable requirements baseline.";
+    addDriver({
+      key: "incomplete_requirements",
+      label: "Incomplete requirements",
+      level,
+      rationale,
+      owner: ownerInfo.owner,
+      ownerNeedsConfirmation: ownerInfo.ownerNeedsConfirmation,
+      mitigations: [
+        "Run a discovery and requirements-validation step with acceptance criteria and priorities.",
+        "Baseline must-have requirements before design approval.",
+      ],
+      sectionActions: level === "Low" ? {} : {
+        sectionD: ["Discovery/requirements validation step and acceptance-criteria baseline added to deliverables."],
+        sectionG: ["Requirements workshop and baseline signoff added to next steps."],
+      },
+      missingInputs,
+      minimumNextStep: missingInputs.length
+        ? "Document top requirements and acceptance criteria for the first release scope."
+        : "",
+      followUpOwner: missingInputs.length ? "Project Manager" : "",
+    });
+  }
+
+  {
+    const missingInputs = [];
+    if (!intake.projectGoal) missingInputs.push("One-sentence goal");
+    if (!goalMeasured) missingInputs.push("Measurable success criteria / definition of done");
+    const ownerInfo = resolveFailureDriverOwner(intake, context, roleCoverage, ["sponsor", "ba", "pm"], "Project Manager");
+    const level = (!intake.projectGoal || outcomesCount === 0)
+      ? "High"
+      : (!goalMeasured || outcomesCount < 2 ? "Medium" : "Low");
+    const rationale = level === "High"
+      ? "Success criteria and expected outcomes are not sufficiently defined in intake."
+      : level === "Medium"
+        ? "Expectations are present but need clearer measurable success criteria and definition of done."
+        : "Goal and outcomes support clear expectations and acceptance planning.";
+    addDriver({
+      key: "unclear_expectations",
+      label: "Unclear expectations",
+      level,
+      rationale,
+      owner: ownerInfo.owner,
+      ownerNeedsConfirmation: ownerInfo.ownerNeedsConfirmation,
+      mitigations: [
+        "Document measurable success criteria and definition of done for the initial release.",
+        "Review and confirm expectations in kickoff and status reporting cadence.",
+      ],
+      sectionActions: level === "Low" ? {} : {
+        sectionA: ["Success criteria and definition-of-done callout added to executive summary assumptions."],
+        sectionG: ["Expectation confirmation step added before baseline approval."],
+      },
+      missingInputs,
+      minimumNextStep: missingInputs.length
+        ? "Define 2-3 measurable success criteria and a definition of done."
+        : "",
+      followUpOwner: missingInputs.length ? "Project Manager" : "",
+    });
+  }
+
+  {
+    const missingInputs = ["Explicit in-scope / out-of-scope boundaries in intake"];
+    const ownerInfo = resolveFailureDriverOwner(intake, context, roleCoverage, ["pm", "sponsor"], "Project Manager");
+    const broadOutcomeSet = outcomesCount >= 4 || normalize(intake.problem).length > 220;
+    const level = broadOutcomeSet && (tbdSignals > 0 || !sponsorNamed)
+      ? "High"
+      : (outcomesCount >= 3 || tbdSignals > 0 ? "Medium" : "Low");
+    const rationale = level === "High"
+      ? "Broad scope signals plus missing boundary confirmation increase scope creep risk."
+      : level === "Medium"
+        ? "Intake does not explicitly define in/out boundaries, so scope control must be enforced early."
+        : "Scope size appears manageable, but boundary controls should still be documented.";
+    addDriver({
+      key: "scope_creep",
+      label: "Scope creep",
+      level,
+      rationale,
+      owner: ownerInfo.owner,
+      ownerNeedsConfirmation: ownerInfo.ownerNeedsConfirmation,
+      mitigations: [
+        "Add change control rules and scope-boundary signoff before planning baseline.",
+        "Require steering approval for scope additions affecting timeline/budget.",
+      ],
+      sectionActions: level === "Low" ? {} : {
+        sectionB: ["Change-control decision rights and escalation rules reinforced in governance."],
+        sectionD: ["In-scope/out-of-scope boundary and change-control note added to deliverables."],
+      },
+      missingInputs,
+      minimumNextStep: "Confirm what is explicitly out of scope for the first release.",
+      followUpOwner: "Project Manager",
+    });
+  }
+
+  {
+    const missingInputs = [];
+    if (!normalize(intake.constraints.staffing)) missingInputs.push("Staffing roles/capacity");
+    const ownerInfo = resolveFailureDriverOwner(intake, context, roleCoverage, ["pm", "sponsor"], "Project Manager");
+    const limitedCapacity = roleCoverage.limited;
+    const lowCoverageForComplexity = highComplexity ? roleCount < 4 : standardOrHigher ? roleCount < 3 : roleCount < 2;
+    const level = (!roleCoverage.hasStaffing && standardOrHigher) || (limitedCapacity && (context.urgencyProfile === "High" || context.urgencyProfile === "Critical"))
+      ? "High"
+      : (!roleCoverage.hasStaffing || limitedCapacity || lowCoverageForComplexity ? "Medium" : "Low");
+    const rationale = level === "High"
+      ? "Staffing/capacity signals are missing or constrained relative to urgency/complexity."
+      : level === "Medium"
+        ? "Resource coverage may be thin for the current scope and complexity, requiring explicit tradeoff decisions."
+        : "Staffing signals indicate a workable baseline for current complexity.";
+    addDriver({
+      key: "lack_of_resources",
+      label: "Lack of resources",
+      level,
+      rationale,
+      owner: ownerInfo.owner,
+      ownerNeedsConfirmation: ownerInfo.ownerNeedsConfirmation,
+      mitigations: [
+        "Add resource gap callout and choose one option path: phase scope, reduce scope, or add support.",
+        "Review capacity assumptions at planning and execution checkpoints.",
+      ],
+      sectionActions: level === "Low" ? {} : {
+        sectionD: ["Resource gap callout + option path added to resource plan and checkpoint schedule."],
+        sectionE: ["Capacity review checkpoint added to operating rhythm and ownership model."],
+        sectionG: ["Resource decision step added to next-week checklist."],
+      },
+      missingInputs,
+      minimumNextStep: missingInputs.length
+        ? "Confirm core delivery roles and weekly capacity (PM, BA/PO, Tech Lead, SMEs)."
+        : "",
+      followUpOwner: missingInputs.length ? "Project Manager" : "",
+    });
+  }
+
+  {
+    const missingInputs = [];
+    if (!normalize(intake.constraints.tech) && systemsCount === 0) missingInputs.push("Technology/tool constraints or impacted systems");
+    const ownerInfo = resolveFailureDriverOwner(intake, context, roleCoverage, ["tech", "sme", "pm"], "Project Manager");
+    const constraintMismatch = technologyScenario && techMissing;
+    const level = techUndecided || constraintMismatch
+      ? "High"
+      : (techMissing || (technologyScenario && systemsCount === 0) ? "Medium" : "Low");
+    const rationale = level === "High"
+      ? "Technology selection/constraints are undecided or mismatched to a technology-heavy scenario."
+      : level === "Medium"
+        ? "Technology assumptions are incomplete, so architecture/security review is needed before baseline."
+        : "Technology constraints/systems are identified for initial planning.";
+    addDriver({
+      key: "choice_of_technology",
+      label: "Choice of technology",
+      level,
+      rationale,
+      owner: ownerInfo.owner,
+      ownerNeedsConfirmation: ownerInfo.ownerNeedsConfirmation,
+      mitigations: [
+        "Add architecture/security review (or POC if needed) before final build baseline.",
+        "Confirm approved platforms/integrations and environment readiness checkpoints.",
+      ],
+      sectionActions: level === "Low" ? {} : {
+        sectionD: ["Architecture/security review or POC step added to planning deliverables and milestone checkpoints."],
+        sectionG: ["Technology decision/POC checkpoint added to next steps."],
+      },
+      missingInputs,
+      minimumNextStep: missingInputs.length
+        ? "Confirm impacted systems and approved technology constraints before design approval."
+        : "",
+      followUpOwner: missingInputs.length ? "Project Manager" : "",
+    });
+  }
+
+  {
+    const missingInputs = [];
+    if (!normalize(intake.constraints.staffing)) missingInputs.push("Delivery team role experience/coverage");
+    if ((technologyScenario || policyScenario) && !systemsCount && !normalize(intake.constraints.tech)) {
+      missingInputs.push("Tooling/domain context for SME support planning");
+    }
+    const ownerInfo = resolveFailureDriverOwner(intake, context, roleCoverage, ["pm", "sme", "training"], "Project Manager");
+    const likelyInexperience = roleCoverage.inexperienceSignal;
+    const thinCoverage = roleCount < (highComplexity ? 4 : 3);
+    const level = likelyInexperience
+      ? "High"
+      : ((thinCoverage && (technologyScenario || policyScenario || highComplexity)) ? "Medium" : "Low");
+    const rationale = level === "High"
+      ? "Staffing signals indicate a new/learning team, increasing delivery and quality risk."
+      : level === "Medium"
+        ? "Specialist role coverage appears limited for the scenario/complexity, so SME support and reviews are needed."
+        : "No strong inexperience signal detected from intake.";
+    addDriver({
+      key: "inexperience",
+      label: "Inexperience",
+      level,
+      rationale,
+      owner: ownerInfo.owner,
+      ownerNeedsConfirmation: ownerInfo.ownerNeedsConfirmation,
+      mitigations: [
+        "Add SME review checkpoints and targeted onboarding/training before key phase exits.",
+        "Use peer review or advisory sessions for high-risk decisions.",
+      ],
+      sectionActions: level === "Low" ? {} : {
+        sectionD: ["SME review checkpoints and onboarding/training deliverables added to planning baseline."],
+        sectionE: ["Peer review / SME checkpoint added to operating rhythm and accountability controls."],
+        sectionG: ["SME engagement and onboarding actions added to next steps."],
+      },
+      missingInputs,
+      minimumNextStep: missingInputs.length
+        ? "Confirm team role coverage and identify SMEs for coaching/review support."
+        : "",
+      followUpOwner: missingInputs.length ? "Project Manager" : "",
+    });
+  }
+
+  const bySection = {};
+  const flagged = evaluations.filter((item) => item.level === "High" || item.level === "Medium");
+  evaluations.forEach((evaluation) => {
+    Object.entries(evaluation.sectionActions || {}).forEach(([sectionKey, actions]) => {
+      if (!Array.isArray(actions) || !actions.length) return;
+      if (!bySection[sectionKey]) bySection[sectionKey] = [];
+      bySection[sectionKey].push({
+        ...evaluation,
+        actionsForSection: actions,
+      });
+    });
+  });
+
+  const qualityGate = {
+    evaluatedAllNine: evaluations.length === 9,
+    flaggedAssigned: flagged.every((item) => Boolean(normalize(item.owner))),
+    flaggedEmbedded: flagged.every((item) => Object.keys(item.sectionActions || {}).length > 0),
+  };
+  qualityGate.passed = qualityGate.evaluatedAllNine && qualityGate.flaggedAssigned && qualityGate.flaggedEmbedded;
+
+  return {
+    evaluations,
+    flagged,
+    bySection,
+    qualityGate,
+  };
+}
+
+function appendRiskAwarenessBlock(baseText, context, sectionKey) {
+  const review = context?.failureDriverReview;
+  const entries = Array.isArray(review?.bySection?.[sectionKey]) ? review.bySection[sectionKey] : [];
+  if (!entries.length) return baseText;
+
+  const lines = [
+    "",
+    "Risk Awareness:",
+    ...entries.map((entry) => {
+      const actions = (entry.actionsForSection || entry.mitigations || []).join(" ");
+      const rationale = normalize(entry.rationale);
+      const pieces = [
+        `- ${entry.label} (${entry.level})`,
+        `Owner: ${entry.owner}`,
+        `Action(s): ${actions}`,
+      ];
+      if (rationale) pieces.push(`Rationale: ${rationale}`);
+      if (entry.missingInputs.length) {
+        pieces.push(`Missing input: ${entry.missingInputs.join("; ")}`);
+        pieces.push(`Minimum next step: ${entry.minimumNextStep || "Confirm missing intake details."}`);
+        pieces.push(`Interim owner for follow-up: ${entry.followUpOwner || "Project Manager"}`);
+      }
+      pieces.push(`Where it shows up: ${entry.whereReflected.join("; ")}`);
+      return pieces.join(" | ");
+    }),
+  ];
+
+  return [baseText, ...lines].join("\n");
 }
 
 function buildMilestones(submissionTimestamp, goLiveDate, urgency, timelineConstraint = "") {
@@ -2086,7 +2623,7 @@ function buildExecutiveSummary(intake, context, followups) {
       ? "Use full governance with formal gates, steering approvals, and audit-ready artifacts."
       : "Use balanced governance with clear accountability and minimal overhead.";
 
-  return [
+  const text = [
     `- Success looks like: ${projectTitle} delivers ${goal} with adoption across ${intake.stakeholders.slice(0, 2).join(" and ") || "key stakeholder groups"}.`,
     `- Scenario type: ${context.scenarioType} with ${context.urgencyProfile.toLowerCase()} urgency and ${context.governanceMode.toLowerCase()}.`,
     `- Primary outcomes to track: ${outcomes}.`,
@@ -2097,6 +2634,7 @@ function buildExecutiveSummary(intake, context, followups) {
     `- Sponsor accountability: ${context.ownerLabel}.`,
     `- Assumptions and intake gaps: ${assumptions}`,
   ].join("\n");
+  return appendRiskAwarenessBlock(text, context, "sectionA");
 }
 
 function buildGovernanceModel(intake, context) {
@@ -2121,7 +2659,7 @@ function buildGovernanceModel(intake, context) {
     ? "Required artifacts: charter, RACI, milestone plan, RAID log, decision log, weekly status, readiness checklist, go-live signoff."
     : "Required artifacts: scope one-pager, action log, RAID log, decision log, weekly status summary.";
 
-  return [
+  const text = [
     "Recommended governance structure:",
     "- Steering Committee: Sponsor, product/business owner, PM, Tech Lead, and key domain leads.",
     "- Working Group: PM, delivery leads, operations owner, analytics/reporting lead.",
@@ -2144,6 +2682,7 @@ function buildGovernanceModel(intake, context) {
     ...cadence.map((line) => `- ${line}`),
     `- ${artifacts}`,
   ].join("\n");
+  return appendRiskAwarenessBlock(text, context, "sectionB");
 }
 
 function buildProcessModel(intake, context) {
@@ -2213,7 +2752,7 @@ function buildPlanningDeliverables(intake, context) {
 
   const stakeholderResponsibilities = buildStakeholderResponsibilityLines(intake);
 
-  return [
+  const text = [
     "Scope statement:",
     `Project: ${intake.projectTitle || "Project to be named"}`,
     `Goal: ${intake.projectGoal || "Goal pending sponsor input"}`,
@@ -2242,6 +2781,7 @@ function buildPlanningDeliverables(intake, context) {
     "RAID log starter (top 5 risks + mitigations):",
     raidLog,
   ].join("\n");
+  return appendRiskAwarenessBlock(text, context, "sectionD");
 }
 
 function buildExecutionModel(intake, context) {
@@ -2250,7 +2790,7 @@ function buildExecutionModel(intake, context) {
     .slice(0, 4)
     .map((checkpoint) => `- ${checkpoint}`)
     .join("\n");
-  return [
+  const text = [
     "Recommended operating rhythm:",
     "- Weekly status review: progress, milestones, blockers, risks, and decisions.",
     "- Action log review: verify owner, due date, status, and blocker notes.",
@@ -2277,6 +2817,7 @@ function buildExecutionModel(intake, context) {
     `- Reporting emphasis: ${capitalize(reportingFocus)} and accountability transparency`,
     `- Governance posture: ${context.governanceMode}`,
   ].join("\n");
+  return appendRiskAwarenessBlock(text, context, "sectionE");
 }
 
 function buildExpertCollaboration(intake, context) {
@@ -2308,7 +2849,7 @@ function buildNextSteps(intake, context) {
   const startDate = new Date();
   const weekLabel = `week of ${formatDate(startDate)}`;
 
-  return [
+  const text = [
     `Do this next week checklist (${weekLabel}):`,
     "1. Confirm sponsor, product owner, and PM accountability in writing.",
     "2. Finalize scope statement with in-scope and out-of-scope boundaries.",
@@ -2321,6 +2862,7 @@ function buildNextSteps(intake, context) {
     "9. Define launch readiness criteria and draft rollout/training plan.",
     `10. Align governance strictness to ${context.governanceMode.toLowerCase()} and enforce escalation within 48 hours for blockers.`,
   ].join("\n");
+  return appendRiskAwarenessBlock(text, context, "sectionG");
 }
 
 function buildCheckpointPlan(milestones, intake) {
@@ -2390,6 +2932,32 @@ function buildAIInsights(intake, context, followups, timeline, workMatrix, aiMet
   const constraintsList = Array.isArray(context.topConstraints) ? context.topConstraints : [];
   const constraints = constraintsList.length ? constraintsList.join("; ") : "No constraints recorded.";
   const aiLabel = aiMeta.provider || "Local assistant";
+  const failureDriverReview = context?.failureDriverReview || { evaluations: [], flagged: [], qualityGate: {} };
+  const failureDriverLines = (failureDriverReview.evaluations || []).map((item) => {
+    const base = `- ${item.label}: ${item.level} | Rationale: ${item.rationale}`;
+    if (item.level !== "High" && item.level !== "Medium") {
+      if (item.missingInputs?.length) {
+        return `${base}\n  Missing input: ${item.missingInputs.join("; ")}\n  Minimum next step: ${item.minimumNextStep || "Confirm missing intake details."}\n  Interim owner for follow-up: ${item.followUpOwner || "Project Manager"}`;
+      }
+      return base;
+    }
+    const details = [
+      `Owner: ${item.owner}`,
+      `Mitigation action(s): ${(item.mitigations || []).join(" ")}`,
+      `Where it shows up: ${(item.whereReflected || []).join("; ")}`,
+    ];
+    if (item.missingInputs?.length) {
+      details.push(`Missing input: ${item.missingInputs.join("; ")}`);
+      details.push(`Minimum next step: ${item.minimumNextStep || "Confirm missing intake details."}`);
+      details.push(`Interim owner for follow-up: ${item.followUpOwner || "Project Manager"}`);
+    }
+    return `${base}\n  ${details.join("\n  ")}`;
+  });
+  const flaggedCount = failureDriverReview.flagged?.length || 0;
+  const qualityGate = failureDriverReview.qualityGate || {};
+  const qualityGateLine = qualityGate.passed
+    ? `Quality gate: All 9 failure drivers were evaluated, and all ${flaggedCount} High/Medium items were assigned and embedded in existing Solution Pack sections.`
+    : "Quality gate: Review failure-driver assignments/embeds before finalizing the pack.";
 
   return [
     `AI insights source: ${aiLabel}`,
@@ -2403,6 +2971,10 @@ function buildAIInsights(intake, context, followups, timeline, workMatrix, aiMet
     `3. Run a focused dependency review with PM + Tech Lead + SMEs before Phase 2 gate.`,
     `4. Require weekly risk aging review and close/open decisions with due dates.`,
     `5. Publish an adoption readiness mini-plan no later than ${timeline[3]?.targetDate || timeline[timeline.length - 1]?.targetDate || "the validation phase"}.`,
+    "",
+    qualityGateLine,
+    `Failure-driver review summary (${failureDriverReview.evaluations?.length || 0}/9 evaluated):`,
+    ...(failureDriverLines.length ? failureDriverLines : ["- Failure-driver review not available."]),
     "",
     `Signals monitored: follow-up gaps (${followups.length}), at-risk matrix items (${delayedItems}), urgency (${context.urgencyProfile}).`,
   ].join("\n");
