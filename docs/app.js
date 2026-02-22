@@ -66,6 +66,7 @@ const exportSolutionPdfEl = document.getElementById("exportSolutionPdf");
 const solutionPdfProjectNameEl = document.getElementById("solutionPdfProjectName");
 const solutionPdfProjectSummaryEl = document.getElementById("solutionPdfProjectSummary");
 const solutionPdfTocListEl = document.getElementById("solutionPdfTocList");
+const solutionDisclaimerEl = document.querySelector(".solution-disclaimer");
 const aiModeEl = document.getElementById("aiMode");
 const aiModelEl = document.getElementById("aiModel");
 const aiEndpointEl = document.getElementById("aiEndpoint");
@@ -4437,6 +4438,7 @@ function renderSolutionPdfHeader(pack) {
 }
 
 function renderSolutionPack(pack) {
+  if (solutionDisclaimerEl) solutionDisclaimerEl.hidden = false;
   const scenario = pack.context?.scenarioType || "Cross-functional";
   const aiLabel = pack.aiMeta?.provider ? ` | AI: ${pack.aiMeta.provider}` : " | AI: Local assistant";
   solutionMetaEl.textContent = `${pack.title} | ${pack.complexity} complexity | ${scenario} | Generated ${formatDateTime(pack.createdAt)}${aiLabel}`;
@@ -4851,6 +4853,7 @@ function clearSessionData(statusMessage = "Session data cleared.") {
 }
 
 function resetSolutionPackDisplays() {
+  if (solutionDisclaimerEl) solutionDisclaimerEl.hidden = true;
   solutionMetaEl.textContent = "";
   if (solutionPdfProjectNameEl) solutionPdfProjectNameEl.textContent = "Project Name";
   if (solutionPdfProjectSummaryEl) {
