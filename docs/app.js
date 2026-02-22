@@ -2,7 +2,9 @@ const STORAGE_KEY = "cunySolutionPackHistorySession";
 const RETENTION_EXPIRY_KEY = "cunySessionRetentionExpiry";
 const SAMPLE_ROTATION_KEY = "cunySampleRotationNextIndex";
 const ANALYTICS_STORAGE_KEY = "cunyPmAppAnalyticsEvents";
+const ANALYTICS_PROVIDER_NAME = "CountAPI";
 const ANALYTICS_SHARED_API_BASE = "https://api.countapi.xyz";
+const ANALYTICS_SHARED_SITE_ID = "pm-solution-builder-ghpages-unified";
 const ANALYTICS_SHARED_NAMESPACE_PREFIX = "cuny-pm-solution-builder";
 const ANALYTICS_SHARED_CACHE_TTL_MS = 30 * 1000;
 const RETENTION_MS = 15 * 60 * 1000;
@@ -79,6 +81,7 @@ const loaderProgressFillEl = document.getElementById("loaderProgressFill");
 const logoHomeTriggerEl = document.getElementById("logoHomeBtn") || document.querySelector(".header-logo");
 const analyticsContentEl = document.getElementById("analyticsContent");
 const analyticsRefreshEl = document.getElementById("analyticsRefresh");
+const analyticsTrackingInfoEl = document.getElementById("analyticsTrackingInfo");
 const analyticsLastUpdatedEl = document.getElementById("analyticsLastUpdated");
 const analyticsFormTotalEl = document.getElementById("analyticsFormTotal");
 const analyticsGenerateTotalEl = document.getElementById("analyticsGenerateTotal");
@@ -754,15 +757,46 @@ function waitMs(ms) {
   });
 }
 
+function isLocalAnalyticsEnvironment() {
+  const protocol = normalize(window.location.protocol).toLowerCase();
+  const hostname = normalize(window.location.hostname).toLowerCase();
+  return protocol === "file:" || hostname === "localhost" || hostname === "127.0.0.1";
+}
+
 function getAnalyticsSharedNamespace() {
   if (analyticsSharedNamespaceCache) return analyticsSharedNamespaceCache;
-  const host = normalize(window.location.hostname).toLowerCase() || "local";
-  const path = normalize(window.location.pathname).toLowerCase() || "/";
-  const slug = `${host}${path}`
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "") || "default";
-  analyticsSharedNamespaceCache = `${ANALYTICS_SHARED_NAMESPACE_PREFIX}-${slug}`.slice(0, 96);
+  if (isLocalAnalyticsEnvironment()) {
+    const host = normalize(window.location.hostname).toLowerCase() || "local";
+    const path = normalize(window.location.pathname).toLowerCase() || "/";
+    const slug = `${host}${path}`
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "default";
+    analyticsSharedNamespaceCache = `${ANALYTICS_SHARED_NAMESPACE_PREFIX}-local-${slug}`.slice(0, 96);
+    return analyticsSharedNamespaceCache;
+  }
+  analyticsSharedNamespaceCache = `${ANALYTICS_SHARED_NAMESPACE_PREFIX}-${ANALYTICS_SHARED_SITE_ID}`.slice(0, 96);
   return analyticsSharedNamespaceCache;
+}
+
+function getAnalyticsProviderHost() {
+  try {
+    return new URL(ANALYTICS_SHARED_API_BASE).host;
+  } catch {
+    return ANALYTICS_SHARED_API_BASE;
+  }
+}
+
+function renderAnalyticsTrackingInfo(view = null) {
+  if (!analyticsTrackingInfoEl) return;
+  const namespace = getAnalyticsSharedNamespace();
+  const environmentLabel = isLocalAnalyticsEnvironment() ? "Local/dev namespace" : "Shared production namespace";
+  const sourceMode = view?.source === "shared"
+    ? "Shared dataset"
+    : view?.source === "local"
+      ? "Local fallback"
+      : "Shared dataset";
+
+  analyticsTrackingInfoEl.textContent = `Analytics provider: ${ANALYTICS_PROVIDER_NAME} (${getAnalyticsProviderHost()}) | Tracking ID: ${namespace} | Mode: ${sourceMode} | ${environmentLabel}`;
 }
 
 function getAnalyticsEventCounterCode(type) {
@@ -1019,7 +1053,10 @@ async function getUnifiedAnalyticsView(range, options = {}) {
   try {
     return await fetchSharedAnalyticsView(range, options);
   } catch {
-    return buildLocalAnalyticsView(range);
+    if (isLocalAnalyticsEnvironment()) {
+      return buildLocalAnalyticsView(range);
+    }
+    throw new Error("Shared analytics unavailable");
   }
 }
 
@@ -1411,7 +1448,16 @@ async function renderAnalyticsCounts({ force = false } = {}) {
   try {
     view = await getUnifiedAnalyticsView(state.analyticsRange || "daily", { force });
   } catch {
-    view = buildLocalAnalyticsView(state.analyticsRange || "daily");
+    view = {
+      source: "shared",
+      sourceLabel: "Shared site analytics unavailable",
+      summary: {
+        form: { daily: 0, weekly: 0, monthly: 0, total: 0 },
+        generate: { daily: 0, weekly: 0, monthly: 0, total: 0 },
+      },
+      chartData: buildAnalyticsChartDataFromBuckets(buildAnalyticsBuckets(state.analyticsRange || "daily")),
+      unavailable: true,
+    };
   }
 
   if (requestId !== state.analyticsRenderRequestId) {
@@ -1445,12 +1491,14 @@ async function renderAnalyticsCounts({ force = false } = {}) {
   if (analyticsGenerateTotalEl) analyticsGenerateTotalEl.textContent = String(generateTotal);
 
   renderAnalyticsUsageChart(view?.chartData || buildAnalyticsTimeSeries(state.analyticsRange || "daily"));
+  renderAnalyticsTrackingInfo(view);
 
   const sourceLabel = normalize(view?.sourceLabel);
   const partialLabel = view?.partial ? " (partial sync)" : "";
+  const unavailableLabel = view?.unavailable ? " (check network or counter service)" : "";
   if (analyticsLastUpdatedEl) {
     analyticsLastUpdatedEl.textContent = sourceLabel
-      ? `Last updated: ${formatDateTime(new Date())} | ${sourceLabel}${partialLabel}`
+      ? `Last updated: ${formatDateTime(new Date())} | ${sourceLabel}${partialLabel}${unavailableLabel}`
       : `Last updated: ${formatDateTime(new Date())}`;
   }
 

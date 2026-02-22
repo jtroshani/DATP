@@ -300,6 +300,17 @@ h3 {
   padding: 0.62rem 0.68rem 0.66rem;
 }
 
+.analytics-tracking-info {
+  margin: 0;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid #d8e6f4;
+  border-radius: 10px;
+  background: #ffffff;
+  font-size: 0.78rem;
+  color: #4f6985;
+  overflow-wrap: anywhere;
+}
+
 .analytics-chart-header {
   display: flex;
   flex-wrap: wrap;
