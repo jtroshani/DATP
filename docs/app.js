@@ -731,7 +731,7 @@ function waitMs(ms) {
 
 function setAnalyticsRange(range) {
   const normalizedRange = normalize(range).toLowerCase();
-  const supportedRanges = ["daily", "weekly", "monthly"];
+  const supportedRanges = ["daily", "weekly", "monthly", "yearly"];
   state.analyticsRange = supportedRanges.includes(normalizedRange) ? normalizedRange : "daily";
 
   analyticsRangeBtns.forEach((btn) => {
@@ -747,6 +747,10 @@ function formatAnalyticsBucketLabel(dateValue, range) {
   const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
   if (Number.isNaN(date.getTime())) return "";
 
+  if (range === "yearly") {
+    return String(date.getFullYear());
+  }
+
   if (range === "monthly") {
     return date.toLocaleDateString(undefined, { month: "short", year: "2-digit" });
   }
@@ -757,6 +761,23 @@ function formatAnalyticsBucketLabel(dateValue, range) {
 function buildAnalyticsBuckets(range, nowDate = new Date()) {
   const buckets = [];
   const now = startOfDay(nowDate);
+
+  if (range === "yearly") {
+    const currentYear = now.getFullYear();
+    for (let offset = 4; offset >= 0; offset -= 1) {
+      const year = currentYear - offset;
+      const start = new Date(year, 0, 1);
+      const end = new Date(year + 1, 0, 1);
+      buckets.push({
+        startTs: start.getTime(),
+        endTs: end.getTime(),
+        label: formatAnalyticsBucketLabel(start, "yearly"),
+        formCount: 0,
+        generateCount: 0,
+      });
+    }
+    return buckets;
+  }
 
   if (range === "weekly") {
     const weekStart = getStartOfWeek(now);
