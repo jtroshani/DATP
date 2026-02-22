@@ -966,6 +966,17 @@ body.is-loading-solution {
   font-size: 0.88rem;
 }
 
+.solution-disclaimer {
+  margin-bottom: 0.85rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--neutral-200);
+  border-left: 4px solid var(--cuny-blue);
+  border-radius: 10px;
+  background: #f8fbff;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
 .solution-pdf-header {
   display: none;
 }
