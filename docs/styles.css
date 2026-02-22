@@ -199,7 +199,7 @@ h3 {
 
 .tab-nav {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.65rem;
   margin: 0 0 1.2rem;
 }
@@ -235,6 +235,140 @@ h3 {
 
 .tab-panel.active {
   display: block;
+}
+
+.analytics-header {
+  margin-bottom: 0.75rem;
+}
+
+.analytics-auth-gate {
+  border: 1px solid #cdddec;
+  border-radius: 12px;
+  background: #f8fbff;
+  padding: 0.9rem;
+}
+
+.analytics-auth-gate h3 {
+  margin: 0;
+  font-size: 1rem;
+  color: #173d63;
+}
+
+.analytics-login-form {
+  margin-top: 0.55rem;
+}
+
+.analytics-login-actions {
+  margin-top: 0.2rem;
+}
+
+.analytics-security-note {
+  margin-top: 0.55rem;
+}
+
+.analytics-security-note > summary {
+  cursor: pointer;
+  width: fit-content;
+  font-weight: 600;
+  color: #1c4d7d;
+}
+
+.analytics-security-note p {
+  margin: 0.35rem 0 0;
+  color: #3b5775;
+  font-size: 0.86rem;
+}
+
+.analytics-content {
+  display: grid;
+  gap: 0.72rem;
+}
+
+.analytics-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.analytics-toolbar-actions {
+  display: inline-flex;
+  gap: 0.4rem;
+}
+
+.analytics-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.analytics-summary-card {
+  border: 1px solid #ccdded;
+  border-radius: 10px;
+  background: #f7fbff;
+  padding: 0.62rem 0.68rem;
+}
+
+.analytics-summary-label {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #2d4967;
+}
+
+.analytics-summary-value {
+  margin: 0.08rem 0 0;
+  font-size: 1.45rem;
+  font-weight: 700;
+  line-height: 1.1;
+  color: #0033a1;
+}
+
+.analytics-summary-meta {
+  margin: 0.08rem 0 0;
+  font-size: 0.76rem;
+  color: #57708a;
+}
+
+.analytics-table-wrap {
+  border: 1px solid #ccdded;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.analytics-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.analytics-table th,
+.analytics-table td {
+  padding: 0.52rem 0.56rem;
+  border-bottom: 1px solid #d9e6f2;
+  text-align: left;
+  font-size: 0.84rem;
+  color: #1f3f61;
+}
+
+.analytics-table th {
+  background: #f3f8ff;
+  font-weight: 700;
+}
+
+.analytics-table tbody th {
+  background: #fafdff;
+  font-weight: 600;
+}
+
+.analytics-table tbody tr:last-child th,
+.analytics-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.analytics-last-updated {
+  margin: 0;
 }
 
 .grid {
@@ -2045,6 +2179,16 @@ body.is-preparing-pdf-layout .raid-list li {
     letter-spacing: 0;
   }
 
+  .analytics-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .analytics-table th,
+  .analytics-table td {
+    font-size: 0.78rem;
+    padding: 0.44rem 0.4rem;
+  }
+
   .quick-actions-bar {
     grid-template-columns: 1fr 1fr;
     gap: 0.36rem;
@@ -2223,6 +2367,14 @@ body.is-preparing-pdf-layout .raid-list li {
     border-radius: 999px;
   }
 
+  .analytics-toolbar-actions {
+    width: 100%;
+  }
+
+  .analytics-toolbar-actions .secondary-btn {
+    flex: 1 1 0;
+  }
+
   .tab-panel {
     padding: 0.9rem;
   }
@@ -2272,6 +2424,12 @@ body.is-preparing-pdf-layout .raid-list li {
   .tab-btn {
     padding: 0.38rem 0.12rem;
     font-size: 0.66rem;
+  }
+
+  .analytics-table th,
+  .analytics-table td {
+    font-size: 0.72rem;
+    padding: 0.4rem 0.32rem;
   }
 
   .solution-subtabs {
@@ -2362,6 +2520,7 @@ body.is-preparing-pdf-layout .raid-list li {
   #tab-intake,
   #tab-solution,
   #tab-history,
+  #tab-analytics,
   .help-panel,
   .generation-loader,
   .privacy-notice,

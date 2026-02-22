@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Project Management Solution Builder</title>
-    <link rel="stylesheet" href="styles.css?v=20260222a" />
+    <link rel="stylesheet" href="styles.css?v=20260222b" />
   </head>
   <body>
     <div class="app-shell">
@@ -48,6 +48,7 @@
         <button class="tab-btn active" id="tabbtn-intake" data-tab="intake" role="tab" aria-selected="true" aria-controls="tab-intake" type="button">Intake</button>
         <button class="tab-btn" id="tabbtn-solution" data-tab="solution" role="tab" aria-selected="false" aria-controls="tab-solution" type="button">Solution Pack</button>
         <button class="tab-btn" id="tabbtn-history" data-tab="history" role="tab" aria-selected="false" aria-controls="tab-history" type="button">Version History</button>
+        <button class="tab-btn" id="tabbtn-analytics" data-tab="analytics" role="tab" aria-selected="false" aria-controls="tab-analytics" type="button">Analytics</button>
       </nav>
 
       <main>
@@ -407,6 +408,93 @@
           <p class="helper-text">Saved locally on this device.</p>
           <ul id="versionList" class="version-list"></ul>
         </section>
+
+        <section class="tab-panel" id="tab-analytics" role="tabpanel" tabindex="0" aria-labelledby="tabbtn-analytics">
+          <div class="analytics-header">
+            <h2>Private Analytics</h2>
+            <p class="helper-text">Admin-only usage dashboard for form access and solution generation activity.</p>
+          </div>
+
+          <div class="analytics-auth-gate" id="analyticsAuthGate">
+            <h3>Admin sign in</h3>
+            <p class="helper-text">Sign in to view daily, weekly, and monthly analytics.</p>
+            <form id="analyticsLoginForm" class="analytics-login-form" novalidate>
+              <label>
+                Admin username
+                <input id="analyticsUsername" type="text" autocomplete="username" required />
+              </label>
+              <label>
+                Admin password
+                <input id="analyticsPassword" type="password" autocomplete="current-password" required />
+              </label>
+              <div class="actions-row analytics-login-actions">
+                <button type="submit" class="primary-btn">Unlock Analytics</button>
+              </div>
+            </form>
+            <p id="analyticsAuthStatus" class="helper-text" aria-live="polite"></p>
+            <details class="analytics-security-note">
+              <summary>Security note</summary>
+              <p>
+                This static deployment uses client-side access controls. For strict enforcement, add hosting-level authentication or IP allowlisting.
+              </p>
+            </details>
+          </div>
+
+          <div class="analytics-content" id="analyticsContent" hidden>
+            <div class="analytics-toolbar">
+              <p id="analyticsViewerMeta" class="helper-text"></p>
+              <div class="analytics-toolbar-actions">
+                <button type="button" class="secondary-btn" id="analyticsRefresh">Refresh</button>
+                <button type="button" class="secondary-btn" id="analyticsLogout">Log out</button>
+              </div>
+            </div>
+
+            <div class="analytics-summary-grid">
+              <article class="analytics-summary-card">
+                <p class="analytics-summary-label">Form Accessed</p>
+                <p class="analytics-summary-value" id="analyticsFormTotal">0</p>
+                <p class="analytics-summary-meta">Total tracked</p>
+              </article>
+              <article class="analytics-summary-card">
+                <p class="analytics-summary-label">Generate Clicked</p>
+                <p class="analytics-summary-value" id="analyticsGenerateTotal">0</p>
+                <p class="analytics-summary-meta">Total tracked</p>
+              </article>
+            </div>
+
+            <div class="analytics-table-wrap">
+              <table class="analytics-table" aria-label="Analytics usage counts">
+                <thead>
+                  <tr>
+                    <th scope="col">Event</th>
+                    <th scope="col">Daily</th>
+                    <th scope="col">Weekly</th>
+                    <th scope="col">Monthly</th>
+                    <th scope="col">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <th scope="row">Form accessed</th>
+                    <td id="analytics-form-daily">0</td>
+                    <td id="analytics-form-weekly">0</td>
+                    <td id="analytics-form-monthly">0</td>
+                    <td id="analytics-form-total">0</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Generate Solution Pack clicked</th>
+                    <td id="analytics-generate-daily">0</td>
+                    <td id="analytics-generate-weekly">0</td>
+                    <td id="analytics-generate-monthly">0</td>
+                    <td id="analytics-generate-total">0</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <p id="analyticsLastUpdated" class="helper-text analytics-last-updated"></p>
+          </div>
+        </section>
       </main>
 
       <footer class="app-footer-note" aria-label="Privacy note">
@@ -434,6 +522,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=20260222a"></script>
+    <script src="app.js?v=20260222b"></script>
   </body>
 </html>

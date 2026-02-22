@@ -1,14 +1,30 @@
 const STORAGE_KEY = "cunySolutionPackHistorySession";
 const RETENTION_EXPIRY_KEY = "cunySessionRetentionExpiry";
 const SAMPLE_ROTATION_KEY = "cunySampleRotationNextIndex";
+const ANALYTICS_STORAGE_KEY = "cunyPmAppAnalyticsEvents";
+const ANALYTICS_AUTH_SESSION_KEY = "cunyPmAppAnalyticsAuth";
 const RETENTION_MS = 15 * 60 * 1000;
 const RETENTION_WARNING_MS = 60 * 1000;
+
+const ANALYTICS_EVENT_TYPES = {
+  formAccessed: "form_accessed",
+  generateClicked: "generate_solution_pack_clicked",
+};
+
+const ANALYTICS_ACCESS_CONFIG = {
+  username: "jetmir.troshani@cuny.edu",
+  // Default password: CunyAnalytics#2026. Change before publishing broadly.
+  passwordSha256: "e6a77f11dadba21805ff699d2ed226f9f25bdb471308f0dd800d1d2cedbb2e06",
+  requireIpMatch: false,
+  allowedIps: [],
+};
 
 const tabs = document.querySelectorAll(".tab-btn");
 const panels = {
   intake: document.getElementById("tab-intake"),
   solution: document.getElementById("tab-solution"),
   history: document.getElementById("tab-history"),
+  analytics: document.getElementById("tab-analytics"),
 };
 
 const intakeForm = document.getElementById("intakeForm");
@@ -62,6 +78,26 @@ const aiAssistStatusEl = document.getElementById("aiAssistStatus");
 const generationLoaderEl = document.getElementById("generationLoader");
 const loaderProgressFillEl = document.getElementById("loaderProgressFill");
 const logoHomeTriggerEl = document.getElementById("logoHomeBtn") || document.querySelector(".header-logo");
+const analyticsAuthGateEl = document.getElementById("analyticsAuthGate");
+const analyticsContentEl = document.getElementById("analyticsContent");
+const analyticsLoginFormEl = document.getElementById("analyticsLoginForm");
+const analyticsUsernameEl = document.getElementById("analyticsUsername");
+const analyticsPasswordEl = document.getElementById("analyticsPassword");
+const analyticsAuthStatusEl = document.getElementById("analyticsAuthStatus");
+const analyticsRefreshEl = document.getElementById("analyticsRefresh");
+const analyticsLogoutEl = document.getElementById("analyticsLogout");
+const analyticsViewerMetaEl = document.getElementById("analyticsViewerMeta");
+const analyticsLastUpdatedEl = document.getElementById("analyticsLastUpdated");
+const analyticsFormTotalEl = document.getElementById("analyticsFormTotal");
+const analyticsGenerateTotalEl = document.getElementById("analyticsGenerateTotal");
+const analyticsFormDailyEl = document.getElementById("analytics-form-daily");
+const analyticsFormWeeklyEl = document.getElementById("analytics-form-weekly");
+const analyticsFormMonthlyEl = document.getElementById("analytics-form-monthly");
+const analyticsFormTotalCellEl = document.getElementById("analytics-form-total");
+const analyticsGenerateDailyEl = document.getElementById("analytics-generate-daily");
+const analyticsGenerateWeeklyEl = document.getElementById("analytics-generate-weekly");
+const analyticsGenerateMonthlyEl = document.getElementById("analytics-generate-monthly");
+const analyticsGenerateTotalCellEl = document.getElementById("analytics-generate-total");
 
 const sectionEls = {
   sectionA: document.getElementById("sectionA"),
@@ -77,6 +113,8 @@ const sectionEls = {
 const state = {
   currentPack: null,
   versions: loadVersions(),
+  analyticsEvents: loadAnalyticsEvents(),
+  analyticsAuth: loadAnalyticsAuth(),
   retentionExpiresAt: loadRetentionExpiry(),
   retentionWarningTimer: null,
   retentionCleanupTimer: null,
@@ -288,6 +326,7 @@ function init() {
   syncAIControls(true);
   attachEventHandlers();
   setActiveTab("intake");
+  trackAnalyticsEvent(ANALYTICS_EVENT_TYPES.formAccessed);
   setActiveSolutionTab("summary");
   if (state.versions.length > 0) {
     state.currentPack = state.versions[0];
@@ -298,6 +337,7 @@ function init() {
   }
   initializeRetentionLifecycle();
   renderVersionHistory();
+  renderAnalyticsAccessState();
 }
 
 function attachEventHandlers() {
@@ -309,6 +349,31 @@ function attachEventHandlers() {
     logoHomeTriggerEl.addEventListener("click", () => {
       setActiveTab("intake");
       scrollToIntakeTop();
+    });
+  }
+
+  if (analyticsLoginFormEl) {
+    analyticsLoginFormEl.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const username = normalize(analyticsUsernameEl?.value);
+      const password = analyticsPasswordEl?.value || "";
+      await handleAnalyticsLogin(username, password);
+    });
+  }
+
+  if (analyticsRefreshEl) {
+    analyticsRefreshEl.addEventListener("click", () => {
+      state.analyticsEvents = loadAnalyticsEvents();
+      renderAnalyticsCounts();
+    });
+  }
+
+  if (analyticsLogoutEl) {
+    analyticsLogoutEl.addEventListener("click", () => {
+      state.analyticsAuth = null;
+      persistAnalyticsAuth();
+      renderAnalyticsAccessState();
+      if (analyticsAuthStatusEl) analyticsAuthStatusEl.textContent = "Logged out of analytics.";
     });
   }
 
@@ -333,6 +398,7 @@ function attachEventHandlers() {
   intakeForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (state.isGenerating) return;
+    trackAnalyticsEvent(ANALYTICS_EVENT_TYPES.generateClicked);
 
     state.aiConfig = getAIConfig();
     const intake = getIntakeData();
@@ -572,6 +638,7 @@ function attachEventHandlers() {
 }
 
 function setActiveTab(key) {
+  const previousActive = getActiveTabKey();
   tabs.forEach((tab) => {
     const isActive = tab.dataset.tab === key;
     tab.classList.toggle("active", isActive);
@@ -585,6 +652,13 @@ function setActiveTab(key) {
     panel.classList.toggle("active", isActive);
     panel.hidden = !isActive;
   });
+
+  if (key === "intake" && previousActive !== "intake") {
+    trackAnalyticsEvent(ANALYTICS_EVENT_TYPES.formAccessed);
+  }
+  if (key === "analytics") {
+    renderAnalyticsAccessState();
+  }
 }
 
 function scrollToSolutionPackTop() {
@@ -612,6 +686,238 @@ function waitMs(ms) {
   return new Promise((resolve) => {
     window.setTimeout(resolve, ms);
   });
+}
+
+function loadAnalyticsEvents() {
+  try {
+    const raw = localStorage.getItem(ANALYTICS_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(parsed)) return [];
+    return pruneAnalyticsEvents(
+      parsed.filter((item) => item && typeof item.type === "string" && Number.isFinite(Number(item.ts)))
+    );
+  } catch {
+    return [];
+  }
+}
+
+function persistAnalyticsEvents() {
+  try {
+    localStorage.setItem(ANALYTICS_STORAGE_KEY, JSON.stringify(state.analyticsEvents));
+  } catch {
+    // Ignore storage issues and keep runtime behavior intact.
+  }
+}
+
+function pruneAnalyticsEvents(events) {
+  const cutoff = Date.now() - (400 * 24 * 60 * 60 * 1000);
+  return events
+    .filter((item) => Number(item.ts) >= cutoff)
+    .map((item) => ({ type: item.type, ts: Number(item.ts) }));
+}
+
+function loadAnalyticsAuth() {
+  try {
+    const raw = sessionStorage.getItem(ANALYTICS_AUTH_SESSION_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (!parsed || parsed.username !== ANALYTICS_ACCESS_CONFIG.username) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function persistAnalyticsAuth() {
+  try {
+    if (!state.analyticsAuth) {
+      sessionStorage.removeItem(ANALYTICS_AUTH_SESSION_KEY);
+      return;
+    }
+    sessionStorage.setItem(ANALYTICS_AUTH_SESSION_KEY, JSON.stringify(state.analyticsAuth));
+  } catch {
+    // Ignore storage issues and keep runtime behavior intact.
+  }
+}
+
+function trackAnalyticsEvent(type) {
+  const validTypes = Object.values(ANALYTICS_EVENT_TYPES);
+  if (!validTypes.includes(type)) return;
+
+  state.analyticsEvents = pruneAnalyticsEvents([
+    ...(state.analyticsEvents || []),
+    { type, ts: Date.now() },
+  ]);
+  persistAnalyticsEvents();
+
+  if (getActiveTabKey() === "analytics" && state.analyticsAuth) {
+    renderAnalyticsCounts();
+  }
+}
+
+function getStartOfWeek(dateValue) {
+  const date = startOfDay(dateValue);
+  const mondayOffset = (date.getDay() + 6) % 7;
+  date.setDate(date.getDate() - mondayOffset);
+  return date;
+}
+
+function getStartOfMonth(dateValue) {
+  const date = startOfDay(dateValue);
+  date.setDate(1);
+  return date;
+}
+
+function countEventsSince(type, startTimestamp) {
+  const events = state.analyticsEvents || [];
+  return events.filter((item) => item.type === type && Number(item.ts) >= startTimestamp).length;
+}
+
+function countEventsTotal(type) {
+  const events = state.analyticsEvents || [];
+  return events.filter((item) => item.type === type).length;
+}
+
+function renderAnalyticsCounts() {
+  const now = new Date();
+  const startOfTodayTs = startOfDay(now).getTime();
+  const startOfWeekTs = getStartOfWeek(now).getTime();
+  const startOfMonthTs = getStartOfMonth(now).getTime();
+
+  const formDaily = countEventsSince(ANALYTICS_EVENT_TYPES.formAccessed, startOfTodayTs);
+  const formWeekly = countEventsSince(ANALYTICS_EVENT_TYPES.formAccessed, startOfWeekTs);
+  const formMonthly = countEventsSince(ANALYTICS_EVENT_TYPES.formAccessed, startOfMonthTs);
+  const formTotal = countEventsTotal(ANALYTICS_EVENT_TYPES.formAccessed);
+
+  const generateDaily = countEventsSince(ANALYTICS_EVENT_TYPES.generateClicked, startOfTodayTs);
+  const generateWeekly = countEventsSince(ANALYTICS_EVENT_TYPES.generateClicked, startOfWeekTs);
+  const generateMonthly = countEventsSince(ANALYTICS_EVENT_TYPES.generateClicked, startOfMonthTs);
+  const generateTotal = countEventsTotal(ANALYTICS_EVENT_TYPES.generateClicked);
+
+  if (analyticsFormDailyEl) analyticsFormDailyEl.textContent = String(formDaily);
+  if (analyticsFormWeeklyEl) analyticsFormWeeklyEl.textContent = String(formWeekly);
+  if (analyticsFormMonthlyEl) analyticsFormMonthlyEl.textContent = String(formMonthly);
+  if (analyticsFormTotalCellEl) analyticsFormTotalCellEl.textContent = String(formTotal);
+  if (analyticsGenerateDailyEl) analyticsGenerateDailyEl.textContent = String(generateDaily);
+  if (analyticsGenerateWeeklyEl) analyticsGenerateWeeklyEl.textContent = String(generateWeekly);
+  if (analyticsGenerateMonthlyEl) analyticsGenerateMonthlyEl.textContent = String(generateMonthly);
+  if (analyticsGenerateTotalCellEl) analyticsGenerateTotalCellEl.textContent = String(generateTotal);
+
+  if (analyticsFormTotalEl) analyticsFormTotalEl.textContent = String(formTotal);
+  if (analyticsGenerateTotalEl) analyticsGenerateTotalEl.textContent = String(generateTotal);
+  if (analyticsLastUpdatedEl) analyticsLastUpdatedEl.textContent = `Last updated: ${formatDateTime(new Date())}`;
+}
+
+function wildcardToRegex(pattern) {
+  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
+  return new RegExp(`^${escaped}$`);
+}
+
+function isIpAllowed(ip) {
+  const patterns = ANALYTICS_ACCESS_CONFIG.allowedIps || [];
+  if (!patterns.length) return true;
+  return patterns.some((pattern) => wildcardToRegex(pattern).test(ip));
+}
+
+async function fetchClientIpAddress() {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), 4500);
+  try {
+    const response = await fetch("https://api.ipify.org?format=json", {
+      method: "GET",
+      signal: controller.signal,
+      cache: "no-store",
+    });
+    if (!response.ok) return "";
+    const payload = await response.json();
+    return normalize(payload?.ip);
+  } catch {
+    return "";
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
+async function sha256Hex(value) {
+  if (!window.crypto || !window.crypto.subtle) {
+    return "";
+  }
+  const text = new TextEncoder().encode(value || "");
+  const digest = await crypto.subtle.digest("SHA-256", text);
+  const bytes = Array.from(new Uint8Array(digest));
+  return bytes.map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function handleAnalyticsLogin(username, password) {
+  if (!analyticsAuthStatusEl) return;
+  if (!username || !password) {
+    analyticsAuthStatusEl.textContent = "Enter both username and password.";
+    return;
+  }
+
+  analyticsAuthStatusEl.textContent = "Verifying access...";
+
+  const normalizedUsername = username.toLowerCase();
+  const expectedUsername = ANALYTICS_ACCESS_CONFIG.username.toLowerCase();
+  if (normalizedUsername !== expectedUsername) {
+    analyticsAuthStatusEl.textContent = "Access denied.";
+    if (analyticsPasswordEl) analyticsPasswordEl.value = "";
+    return;
+  }
+
+  const passwordHash = await sha256Hex(password);
+  if (!passwordHash) {
+    analyticsAuthStatusEl.textContent = "This browser does not support secure login checks.";
+    return;
+  }
+  if (passwordHash !== ANALYTICS_ACCESS_CONFIG.passwordSha256) {
+    analyticsAuthStatusEl.textContent = "Access denied.";
+    if (analyticsPasswordEl) analyticsPasswordEl.value = "";
+    return;
+  }
+
+  let detectedIp = "";
+  if (ANALYTICS_ACCESS_CONFIG.requireIpMatch) {
+    detectedIp = await fetchClientIpAddress();
+    if (!detectedIp) {
+      analyticsAuthStatusEl.textContent = "Could not verify IP address.";
+      if (analyticsPasswordEl) analyticsPasswordEl.value = "";
+      return;
+    }
+    if (!isIpAllowed(detectedIp)) {
+      analyticsAuthStatusEl.textContent = "IP address is not allowlisted for analytics access.";
+      if (analyticsPasswordEl) analyticsPasswordEl.value = "";
+      return;
+    }
+  }
+
+  state.analyticsAuth = {
+    username: ANALYTICS_ACCESS_CONFIG.username,
+    signedInAt: Date.now(),
+    ip: detectedIp,
+  };
+  persistAnalyticsAuth();
+  if (analyticsPasswordEl) analyticsPasswordEl.value = "";
+  if (analyticsAuthStatusEl) analyticsAuthStatusEl.textContent = "Access granted.";
+  renderAnalyticsAccessState();
+}
+
+function renderAnalyticsAccessState() {
+  const hasAccess = Boolean(state.analyticsAuth);
+  if (analyticsAuthGateEl) analyticsAuthGateEl.hidden = hasAccess;
+  if (analyticsContentEl) analyticsContentEl.hidden = !hasAccess;
+
+  if (!hasAccess) {
+    if (analyticsViewerMetaEl) analyticsViewerMetaEl.textContent = "";
+    return;
+  }
+
+  if (analyticsViewerMetaEl) {
+    const signedInAt = state.analyticsAuth?.signedInAt ? formatDateTime(state.analyticsAuth.signedInAt) : "Unknown";
+    const ipNote = state.analyticsAuth?.ip ? ` | IP: ${state.analyticsAuth.ip}` : "";
+    analyticsViewerMetaEl.textContent = `Signed in as ${state.analyticsAuth.username} | Since ${signedInAt}${ipNote}`;
+  }
+  state.analyticsEvents = loadAnalyticsEvents();
+  renderAnalyticsCounts();
 }
 
 function startGenerationLoader() {
