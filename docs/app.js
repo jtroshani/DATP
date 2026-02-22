@@ -986,9 +986,8 @@ function persistAnalyticsEvents() {
 }
 
 function pruneAnalyticsEvents(events) {
-  const cutoff = Date.now() - (400 * 24 * 60 * 60 * 1000);
   return events
-    .filter((item) => Number(item.ts) >= cutoff)
+    .filter((item) => item && typeof item.type === "string" && Number.isFinite(Number(item.ts)))
     .map((item) => ({ type: item.type, ts: Number(item.ts) }));
 }
 
