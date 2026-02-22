@@ -1107,6 +1107,36 @@ body.is-loading-solution {
   line-height: 1.5;
 }
 
+.excel-template-panel {
+  margin-top: 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--accent-4) 48%, var(--neutral-dove));
+  border-radius: 12px;
+  background: linear-gradient(180deg, #fbfdff 0%, #f7fbff 100%);
+  padding: 0.75rem 0.8rem 0.7rem;
+}
+
+.excel-template-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.excel-template-btn {
+  min-height: 42px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.excel-template-btn.is-busy {
+  opacity: 0.88;
+  cursor: progress;
+}
+
+.excel-template-helper {
+  margin: 0.55rem 0 0;
+  font-size: 0.84rem;
+}
+
 .solution-pdf-header {
   display: none;
 }
@@ -1245,7 +1275,8 @@ body.is-preparing-pdf-layout .toc-page {
 }
 
 body.is-preparing-pdf-layout .solution-actions,
-body.is-preparing-pdf-layout .copy-btn {
+body.is-preparing-pdf-layout .copy-btn,
+body.is-preparing-pdf-layout .excel-template-panel {
   display: none !important;
 }
 
@@ -2454,6 +2485,14 @@ body.is-preparing-pdf-layout .raid-list li {
     min-height: 44px;
   }
 
+  .excel-template-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .excel-template-btn {
+    min-height: 48px;
+  }
+
   .actions-row .primary-btn,
   .actions-row .secondary-btn {
     min-height: 48px;
@@ -2944,7 +2983,8 @@ body.is-preparing-pdf-layout .raid-list li {
   }
 
   body.print-solution-pack .solution-actions,
-  body.print-solution-pack .copy-btn {
+  body.print-solution-pack .copy-btn,
+  body.print-solution-pack .excel-template-panel {
     display: none !important;
   }
 

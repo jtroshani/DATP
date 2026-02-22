@@ -7,6 +7,7 @@ const ANALYTICS_SHARED_API_BASE = "https://api.countapi.xyz";
 const ANALYTICS_SHARED_SITE_ID = "pm-solution-builder-ghpages-unified";
 const ANALYTICS_SHARED_NAMESPACE_PREFIX = "cuny-pm-solution-builder";
 const ANALYTICS_SHARED_CACHE_TTL_MS = 30 * 1000;
+const XLSX_BUNDLE_URL = "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
 const RETENTION_MS = 15 * 60 * 1000;
 const RETENTION_WARNING_MS = 60 * 1000;
 
@@ -67,6 +68,10 @@ const solutionPdfProjectNameEl = document.getElementById("solutionPdfProjectName
 const solutionPdfProjectSummaryEl = document.getElementById("solutionPdfProjectSummary");
 const solutionPdfTocListEl = document.getElementById("solutionPdfTocList");
 const solutionDisclaimerEl = document.querySelector(".solution-disclaimer");
+const excelTemplatePanelEl = document.getElementById("solutionExcelTemplates");
+const downloadRaidExcelEl = document.getElementById("downloadRaidExcel");
+const downloadRaciExcelEl = document.getElementById("downloadRaciExcel");
+const downloadLessonsExcelEl = document.getElementById("downloadLessonsExcel");
 const aiModeEl = document.getElementById("aiMode");
 const aiModelEl = document.getElementById("aiModel");
 const aiEndpointEl = document.getElementById("aiEndpoint");
@@ -137,6 +142,7 @@ const state = {
 };
 
 let analyticsSharedNamespaceCache = "";
+let xlsxLoaderPromise = null;
 
 const SIMPLE_AI_DEFAULTS = {
   localModel: "local-heuristic-v2",
@@ -602,6 +608,24 @@ function attachEventHandlers() {
     exportSolutionPdfEl.addEventListener("click", () => {
       if (!ensurePackExists()) return;
       exportSolutionPackPdf();
+    });
+  }
+
+  if (downloadRaidExcelEl) {
+    downloadRaidExcelEl.addEventListener("click", () => {
+      void runExcelTemplateDownload("raid", downloadRaidExcelEl, buildRaidWorkbook);
+    });
+  }
+
+  if (downloadRaciExcelEl) {
+    downloadRaciExcelEl.addEventListener("click", () => {
+      void runExcelTemplateDownload("raci", downloadRaciExcelEl, buildRaciWorkbook);
+    });
+  }
+
+  if (downloadLessonsExcelEl) {
+    downloadLessonsExcelEl.addEventListener("click", () => {
+      void runExcelTemplateDownload("lessons", downloadLessonsExcelEl, buildLessonsLearnedWorkbook);
     });
   }
 
@@ -1807,6 +1831,86 @@ function exportSolutionPackPdf() {
       generationStatusEl.textContent = "PDF export opened. Use Save as PDF in the print dialog.";
     });
   });
+}
+
+function syncExcelTemplatePanelVisibility() {
+  if (!excelTemplatePanelEl) return;
+  excelTemplatePanelEl.hidden = !Boolean(state.currentPack);
+}
+
+function setExcelTemplateButtonsState({ disabled = false, busyButton = null, busyLabel = "" } = {}) {
+  [downloadRaidExcelEl, downloadRaciExcelEl, downloadLessonsExcelEl].filter(Boolean).forEach((button) => {
+    if (!button.dataset.defaultLabel) {
+      button.dataset.defaultLabel = normalize(button.textContent) || "Download";
+    }
+    const isBusy = Boolean(busyButton && button === busyButton);
+    button.disabled = disabled || isBusy;
+    button.setAttribute("aria-disabled", button.disabled ? "true" : "false");
+    button.classList.toggle("is-busy", isBusy);
+    button.textContent = isBusy && busyLabel ? busyLabel : button.dataset.defaultLabel;
+  });
+}
+
+function ensureXlsxLibrary() {
+  if (window.XLSX) return Promise.resolve(window.XLSX);
+  if (xlsxLoaderPromise) return xlsxLoaderPromise;
+
+  xlsxLoaderPromise = new Promise((resolve, reject) => {
+    const existing = document.querySelector(`script[data-lib="xlsx"][src="${XLSX_BUNDLE_URL}"]`);
+    if (existing) {
+      existing.addEventListener("load", () => resolve(window.XLSX), { once: true });
+      existing.addEventListener("error", () => reject(new Error("Could not load Excel library.")), { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = XLSX_BUNDLE_URL;
+    script.async = true;
+    script.defer = true;
+    script.crossOrigin = "anonymous";
+    script.dataset.lib = "xlsx";
+    script.onload = () => {
+      if (window.XLSX) {
+        resolve(window.XLSX);
+        return;
+      }
+      reject(new Error("Excel library loaded but XLSX is unavailable."));
+    };
+    script.onerror = () => reject(new Error("Failed to load Excel library."));
+    document.head.appendChild(script);
+  }).catch((error) => {
+    xlsxLoaderPromise = null;
+    throw error;
+  });
+
+  return xlsxLoaderPromise;
+}
+
+async function runExcelTemplateDownload(templateKey, buttonEl, workbookBuilder) {
+  if (!state.currentPack) {
+    generationStatusEl.textContent = "Generate a Solution Pack first.";
+    return;
+  }
+  if (!buttonEl || typeof workbookBuilder !== "function") return;
+
+  const busyLabel = templateKey === "raid"
+    ? "Generating RAID..."
+    : templateKey === "raci"
+      ? "Generating RACI..."
+      : "Generating Lessons...";
+
+  try {
+    setExcelTemplateButtonsState({ disabled: true, busyButton: buttonEl, busyLabel });
+    generationStatusEl.textContent = "Preparing Excel template...";
+    const XLSX = await ensureXlsxLibrary();
+    const { workbook, filename } = workbookBuilder(state.currentPack, XLSX);
+    XLSX.writeFile(workbook, filename, { compression: true });
+    generationStatusEl.textContent = `${buttonEl.dataset.defaultLabel || "Excel template"} downloaded.`;
+  } catch {
+    generationStatusEl.textContent = "Could not generate the Excel template. Please try again.";
+  } finally {
+    setExcelTemplateButtonsState({ disabled: false });
+  }
 }
 
 function setActiveSolutionTab(key) {
@@ -4318,6 +4422,807 @@ function renderMatrixText(matrixRows) {
     .join("\n");
 }
 
+function sanitizeExcelFileNameSegment(value, fallback = "Project") {
+  const text = normalize(value);
+  const cleaned = (text || fallback)
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\s+/g, "_");
+  return cleaned || fallback;
+}
+
+function getExcelDateStamp(dateValue = new Date()) {
+  return toInputDate(dateValue) || toInputDate(new Date()) || "2026-02-22";
+}
+
+function toExcelDisplayDate(dateValue) {
+  if (!dateValue) return "";
+  const parsed = parseFlexibleDate(dateValue) || new Date(dateValue);
+  if (Number.isNaN(parsed.getTime())) return normalize(String(dateValue));
+  return toInputDate(parsed) || formatDate(parsed);
+}
+
+function getPackTemplateMeta(pack) {
+  const timeline = getTimelineData(pack || {});
+  const intake = pack?.intakeSnapshot || {};
+  const projectName = normalize(intake.projectTitle) || normalize(pack?.title) || "Project";
+  const sponsor = normalize(intake.ownerName) && normalize(intake.ownerArea)
+    ? `${normalize(intake.ownerName)} (${normalize(intake.ownerArea)})`
+    : normalize(intake.ownerName) || normalize(pack?.context?.ownerLabel) || "Project Sponsor (confirm)";
+  const targetDateRaw = intake.goLiveDate || timeline[timeline.length - 1]?.targetISO || timeline[timeline.length - 1]?.targetDate || "";
+  const targetDate = toExcelDisplayDate(targetDateRaw) || "TBD";
+  const generatedDate = formatDateTime(pack?.createdAt || new Date());
+  const generatedDateOnly = getExcelDateStamp(pack?.createdAt || new Date());
+  const version = normalize(pack?.id) || "session";
+  const complexity = normalize(pack?.complexity) || "Standard";
+  const scenario = normalize(pack?.context?.scenarioType) || "Cross-functional";
+  return {
+    projectName,
+    sponsor,
+    targetDate,
+    generatedDate,
+    generatedDateOnly,
+    version,
+    complexity,
+    scenario,
+    timeline,
+    intake,
+  };
+}
+
+function buildTimelinePhaseIndex(timeline = []) {
+  const byPhase = {};
+  const ordered = [];
+  timeline.forEach((item, index) => {
+    const normalizedPhase = normalizePhaseLabel(item?.phase || item?.stage || `Phase ${index + 1}`);
+    const longPhase = normalizedPhase === "M&C" ? "Monitoring & Controlling" : normalizedPhase;
+    const dueDate = toExcelDisplayDate(item?.targetISO || item?.targetDate || "");
+    const startDate = toExcelDisplayDate(item?.startISO || "");
+    const record = {
+      phase: normalizedPhase,
+      longPhase,
+      dueDate: dueDate || "",
+      startDate: startDate || "",
+      phaseNumber: item?.phaseNumber || index + 1,
+      milestone: normalize(item?.milestone),
+    };
+    byPhase[normalizedPhase] = record;
+    ordered.push(record);
+  });
+  return { byPhase, ordered };
+}
+
+function inferPhaseFromTopic(text) {
+  const value = normalize(text).toLowerCase();
+  if (!value) return "Planning";
+  if (/charter|scope|kickoff|alignment|governance cadence|sponsor/.test(value)) return "Initiation";
+  if (/requirement|baseline|dependency|plan|schedule|resource|raci/.test(value)) return "Planning";
+  if (/build|config|design|develop|integration|migration|technical/.test(value)) return "Execution";
+  if (/testing|uat|readiness|training|communications?|status|monitor|quality|checkpoint/.test(value)) return "M&C";
+  if (/go-live|hypercare|handoff|closure|closing|launch/.test(value)) return "Closure";
+  return "Planning";
+}
+
+function canonicalizeRoleLabel(roleText) {
+  const text = normalize(roleText).toLowerCase();
+  if (!text) return "";
+  if (/sponsor/.test(text)) return "Project Sponsor";
+  if (/business owner/.test(text)) return "Business Owner";
+  if (/product owner/.test(text)) return "Product Owner";
+  if (/\b(pm|project manager)\b/.test(text)) return "Project Manager";
+  if (/\b(ba|business analyst|analyst)\b/.test(text)) return "Business Analyst";
+  if (/tech lead|technical lead|architect/.test(text)) return "Technical Lead";
+  if (/delivery team|developer|engineer|configuration/.test(text)) return "Delivery Team";
+  if (/data|integration|bi|reporting/.test(text)) return "Data/Integration Lead";
+  if (/security|compliance|legal|accessibility/.test(text)) return "Security/Compliance Lead";
+  if (/communications?|comms|change/.test(text)) return "Communications Lead";
+  if (/training|enablement/.test(text)) return "Training Lead";
+  if (/operations/.test(text)) return "Operations Lead";
+  if (/vendor/.test(text)) return "Vendor";
+  if (/sme|subject matter/.test(text)) return "SMEs";
+  return "";
+}
+
+function addRolesFromText(roleSet, roleText) {
+  const raw = normalize(roleText);
+  if (!raw) return;
+  raw
+    .replace(/\bto be assigned\b/gi, "")
+    .replace(/[()]/g, " ")
+    .split(/[,+/&]| and /i)
+    .map((part) => canonicalizeRoleLabel(part))
+    .filter(Boolean)
+    .forEach((role) => roleSet.add(role));
+}
+
+function getTemplateRoles(pack) {
+  const roles = new Set();
+  const intake = pack?.intakeSnapshot || {};
+  const matrix = getMatrixData(pack || {}, getTimelineData(pack || {}));
+  const workstreams = getWorkstreamsData(pack || {});
+  const sectionB = getPackSection(pack, "sectionB");
+  const sectionD = getPackSection(pack, "sectionD");
+
+  if (normalize(intake.ownerName)) {
+    roles.add("Project Sponsor");
+    roles.add("Business Owner");
+  }
+
+  matrix.forEach((row) => {
+    addRolesFromText(roles, row.owner);
+    addRolesFromText(roles, row.workItem);
+    addRolesFromText(roles, row.dependencies);
+  });
+
+  workstreams.forEach((stream) => {
+    addRolesFromText(roles, stream.pendingOwner);
+    addRolesFromText(roles, stream.name);
+    addRolesFromText(roles, stream.focus);
+  });
+
+  [sectionB, sectionD, normalize(pack?.context?.scenarioType), normalize(intake.constraints?.staffing), normalize(intake.constraints?.compliance), normalize(intake.constraints?.tech)]
+    .forEach((text) => addRolesFromText(roles, text));
+
+  const ordered = [
+    "Project Sponsor",
+    "Business Owner",
+    "Project Manager",
+    "Product Owner",
+    "Business Analyst",
+    "Technical Lead",
+    "Delivery Team",
+    "Data/Integration Lead",
+    "Security/Compliance Lead",
+    "Communications Lead",
+    "Training Lead",
+    "Operations Lead",
+    "Vendor",
+    "SMEs",
+  ];
+
+  const present = ordered.filter((role) => roles.has(role));
+  if (!present.includes("Project Manager")) present.splice(Math.min(2, present.length), 0, "Project Manager");
+  if (!present.includes("Project Sponsor")) present.unshift("Project Sponsor");
+  if (!present.includes("SMEs")) present.push("SMEs");
+
+  return Array.from(new Set(present)).slice(0, 14);
+}
+
+function pickTemplateOwnerForTopic(topicText, roles = []) {
+  const topic = normalize(topicText).toLowerCase();
+  const preferred = [];
+  if (/security|access|sso|legal|compliance|accessibility/.test(topic)) preferred.push("Security/Compliance Lead");
+  if (/data|integration|migration|report/.test(topic)) preferred.push("Data/Integration Lead");
+  if (/training|enablement/.test(topic)) preferred.push("Training Lead");
+  if (/communications?|comms|rollout/.test(topic)) preferred.push("Communications Lead");
+  if (/build|config|design|technical|environment/.test(topic)) preferred.push("Technical Lead", "Delivery Team");
+  if (/requirement|scope|acceptance/.test(topic)) preferred.push("Product Owner", "Business Analyst");
+  if (/go-live|handoff|hypercare|operations/.test(topic)) preferred.push("Operations Lead", "Project Manager");
+  preferred.push("Project Manager", "Project Sponsor", "SMEs");
+  return preferred.find((role) => roles.includes(role)) || roles[0] || "Project Manager";
+}
+
+function inferImpactPriorityFromText(text, fallbackType = "Risk") {
+  const value = normalize(text).toLowerCase();
+  const highSignal = /critical|compliance|security|legal|launch|go-live|executive|sso|data|integration|scope/.test(value);
+  const mediumSignal = /training|communications?|readiness|dependency|requirements?|resource/.test(value);
+  const base = fallbackType === "Dependency" ? { impact: "M", priority: "M" } : { impact: "M", priority: "M" };
+  if (highSignal) return { impact: "H", priority: "H" };
+  if (mediumSignal) return { impact: "M", priority: "M" };
+  return base;
+}
+
+function inferProbabilityForRisk(text, levelHint = "") {
+  const hint = normalize(levelHint).toLowerCase();
+  if (hint === "high") return "H";
+  if (hint === "medium") return "M";
+  const value = normalize(text).toLowerCase();
+  if (/delayed|unclear|missing|limited|constraint|dependency|tbd/.test(value)) return "M";
+  return "L";
+}
+
+function buildRaidLogSeedRows(pack) {
+  const meta = getPackTemplateMeta(pack);
+  const roles = getTemplateRoles(pack);
+  const timelineIndex = buildTimelinePhaseIndex(meta.timeline);
+  const matrix = getMatrixData(pack || {}, meta.timeline);
+  const intake = meta.intake;
+  const generatedDate = meta.generatedDateOnly;
+  const rows = [];
+  const seen = new Set();
+
+  const addRow = (row) => {
+    if (!row) return;
+    const key = `${normalize(row.Type).toLowerCase()}|${normalize(row.Title).toLowerCase()}`;
+    if (!normalize(row.Title) || seen.has(key)) return;
+    seen.add(key);
+    rows.push(row);
+  };
+
+  const dueDateForPhase = (phase) => timelineIndex.byPhase[phase]?.dueDate || meta.targetDate || "";
+
+  getRaidSnapshotItems(pack).forEach((line) => {
+    const parsed = line.match(/^\d+\)\s*Risk:\s*(.*?)\s*\|\s*Mitigation:\s*(.*)$/i);
+    const titleText = normalize(parsed?.[1] || line.replace(/^\d+\)\s*/,""));
+    const mitigation = normalize(parsed?.[2] || "Define owner, due date, and mitigation plan.");
+    const phase = inferPhaseFromTopic(titleText);
+    const severity = inferImpactPriorityFromText(`${titleText} ${mitigation}`, "Risk");
+    addRow({
+      Type: "Risk",
+      Title: titleText.slice(0, 120),
+      Description: titleText,
+      Impact: severity.impact,
+      Probability: inferProbabilityForRisk(titleText, ""),
+      Priority: severity.priority,
+      Owner: pickTemplateOwnerForTopic(titleText, roles),
+      "Due Date": dueDateForPhase(phase),
+      Status: "Open",
+      "Mitigation / Response": mitigation,
+      "Next Step": `Confirm owner and response plan for ${titleText.toLowerCase()}.`,
+      "Last Updated": generatedDate,
+      Notes: "Seeded from RAID snapshot.",
+      Phase: phase,
+    });
+  });
+
+  matrix.forEach((row) => {
+    const depText = normalize(row.dependencies);
+    if (!depText) return;
+    const phase = inferPhaseFromTopic(`${row.workItem} ${depText}`);
+    addRow({
+      Type: "Dependency",
+      Title: depText,
+      Description: `Dependency for "${normalize(row.workItem)}".`,
+      Impact: inferImpactPriorityFromText(depText, "Dependency").impact,
+      Probability: "",
+      Priority: inferImpactPriorityFromText(depText, "Dependency").priority,
+      Owner: pickTemplateOwnerForTopic(`${row.workItem} ${depText}`, roles),
+      "Due Date": toExcelDisplayDate(row.dueDate) || dueDateForPhase(phase),
+      Status: "Open",
+      "Mitigation / Response": "Track dependency owner, due date, and escalation trigger in weekly review.",
+      "Next Step": `Confirm dependency readiness for ${normalize(row.workItem).toLowerCase()}.`,
+      "Last Updated": generatedDate,
+      Notes: `Derived from execution tracker matrix item: ${normalize(row.workItem)}.`,
+      Phase: phase,
+    });
+  });
+
+  const constraintEntries = [
+    ["Target timeline", normalize(intake.constraints?.time), "Assumption"],
+    ["Budget", normalize(intake.constraints?.budget), "Assumption"],
+    ["Staffing", normalize(intake.constraints?.staffing), "Risk"],
+    ["Compliance", normalize(intake.constraints?.compliance), "Risk"],
+    ["Technology", normalize(intake.constraints?.tech), "Risk"],
+  ];
+  constraintEntries.forEach(([label, value, type]) => {
+    if (!value) return;
+    const phase = inferPhaseFromTopic(`${label} ${value}`);
+    const severity = inferImpactPriorityFromText(`${label} ${value}`, type);
+    addRow({
+      Type: type,
+      Title: `${label} constraint`,
+      Description: value,
+      Impact: severity.impact,
+      Probability: type === "Risk" ? inferProbabilityForRisk(value) : "",
+      Priority: severity.priority,
+      Owner: pickTemplateOwnerForTopic(`${label} ${value}`, roles),
+      "Due Date": dueDateForPhase(phase),
+      Status: "Open",
+      "Mitigation / Response": type === "Risk"
+        ? `Validate ${label.toLowerCase()} impacts during planning and track mitigation owner.`
+        : `Confirm ${label.toLowerCase()} assumption and escalation threshold before baseline approval.`,
+      "Next Step": `Review ${label.toLowerCase()} constraint with sponsor and PM.`,
+      "Last Updated": generatedDate,
+      Notes: "Seeded from intake constraints.",
+      Phase: phase,
+    });
+  });
+
+  const failureReview = pack?.context?.failureDriverReview || {};
+  (failureReview.flagged || [])
+    .filter((item) => /^(high|medium)$/i.test(normalize(item.level)))
+    .forEach((item) => {
+      const mitigation = Array.isArray(item.mitigations) && item.mitigations.length
+        ? item.mitigations.join(" | ")
+        : "Confirm mitigation actions and assign due dates.";
+      const phase = inferPhaseFromTopic(`${item.label} ${item.rationale} ${mitigation}`);
+      addRow({
+        Type: "Risk",
+        Title: item.label,
+        Description: item.rationale || `${item.label} identified during intake review.`,
+        Impact: /high/i.test(item.level) ? "H" : "M",
+        Probability: /high/i.test(item.level) ? "H" : "M",
+        Priority: /high/i.test(item.level) ? "H" : "M",
+        Owner: normalize(item.owner) || pickTemplateOwnerForTopic(item.label, roles),
+        "Due Date": dueDateForPhase(phase),
+        Status: "Open",
+        "Mitigation / Response": mitigation,
+        "Next Step": normalize(item.minimumNextStep) || "Confirm mitigation owner and add checkpoint to next steps.",
+        "Last Updated": generatedDate,
+        Notes: `Seeded from failure-driver review (${item.level}).`,
+        Phase: phase,
+      });
+
+      (item.missingInputs || []).forEach((missingInput) => {
+        addRow({
+          Type: "Issue",
+          Title: `Missing input: ${missingInput}`,
+          Description: `Intake is missing ${missingInput.toLowerCase()} needed for planning and risk reduction.`,
+          Impact: "M",
+          Probability: "",
+          Priority: "M",
+          Owner: "Project Manager",
+          "Due Date": dueDateForPhase("Planning"),
+          Status: "Open",
+          "Mitigation / Response": "Collect missing input and update baseline assumptions.",
+          "Next Step": normalize(item.minimumNextStep) || `Confirm ${missingInput.toLowerCase()} with sponsor.`,
+          "Last Updated": generatedDate,
+          Notes: "Follow-up required from failure-driver review.",
+          Phase: "Planning",
+        });
+      });
+    });
+
+  if (rows.length < 8) {
+    getWorkstreamsData(pack).forEach((stream) => {
+      if (rows.length >= 10) return;
+      const phase = inferPhaseFromTopic(`${stream.name} ${stream.focus}`);
+      addRow({
+        Type: "Dependency",
+        Title: `${stream.name} owner assignment`,
+        Description: `Pending owner must be confirmed for workstream "${stream.name}".`,
+        Impact: "M",
+        Probability: "",
+        Priority: "M",
+        Owner: pickTemplateOwnerForTopic(stream.name, roles),
+        "Due Date": dueDateForPhase(phase),
+        Status: "Open",
+        "Mitigation / Response": "Assign workstream lead and confirm workstream checkpoint cadence.",
+        "Next Step": `Confirm workstream owner for ${stream.name.toLowerCase()}.`,
+        "Last Updated": generatedDate,
+        Notes: "Seeded from Workstreams module.",
+        Phase: phase,
+      });
+    });
+  }
+
+  return rows.slice(0, 15).map((row, index) => ({
+    ID: `RAID-${String(index + 1).padStart(3, "0")}`,
+    ...row,
+  }));
+}
+
+function applyWorksheetStructure(XLSX, ws, {
+  totalColumns = 1,
+  titleRowIndex = 0,
+  headerRowIndex = -1,
+  dataStartRowIndex = -1,
+  dataEndRowIndex = -1,
+  columnWidths = [],
+  hiddenColumnIndexes = [],
+}) {
+  ws["!merges"] = ws["!merges"] || [];
+  ws["!merges"].push({
+    s: { r: titleRowIndex, c: 0 },
+    e: { r: titleRowIndex, c: Math.max(0, totalColumns - 1) },
+  });
+
+  if (headerRowIndex >= 0) {
+    const lastDataRow = Math.max(headerRowIndex, dataEndRowIndex >= 0 ? dataEndRowIndex : headerRowIndex);
+    ws["!autofilter"] = {
+      ref: `${XLSX.utils.encode_cell({ r: headerRowIndex, c: 0 })}:${XLSX.utils.encode_cell({ r: lastDataRow, c: Math.max(0, totalColumns - 1) })}`,
+    };
+    ws["!freeze"] = {
+      xSplit: 0,
+      ySplit: headerRowIndex + 1,
+      topLeftCell: XLSX.utils.encode_cell({ r: Math.max(headerRowIndex + 1, dataStartRowIndex >= 0 ? dataStartRowIndex : headerRowIndex + 1), c: 0 }),
+      activePane: "bottomLeft",
+      state: "frozen",
+    };
+  }
+
+  if (columnWidths.length) {
+    ws["!cols"] = columnWidths.map((wch, index) => ({
+      wch,
+      hidden: hiddenColumnIndexes.includes(index),
+    }));
+  }
+}
+
+function buildRaidWorkbook(pack, XLSX) {
+  const meta = getPackTemplateMeta(pack);
+  const rows = buildRaidLogSeedRows(pack);
+  const columns = [
+    "ID",
+    "Type",
+    "Title",
+    "Description",
+    "Impact",
+    "Probability",
+    "Priority",
+    "Owner",
+    "Due Date",
+    "Status",
+    "Mitigation / Response",
+    "Next Step",
+    "Last Updated",
+    "Notes",
+    "Phase",
+  ];
+
+  const aoa = [
+    [`RAID Log — ${meta.projectName}`],
+    [],
+    ["Project Name", meta.projectName, "Sponsor/Owner", meta.sponsor],
+    ["Target Date", meta.targetDate, "Generated Date", meta.generatedDate],
+    ["Version", meta.version, "Complexity", meta.complexity],
+    [],
+    columns,
+    ...rows.map((row) => columns.map((column) => normalize(row[column]))),
+  ];
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  applyWorksheetStructure(XLSX, ws, {
+    totalColumns: columns.length,
+    titleRowIndex: 0,
+    headerRowIndex: 6,
+    dataStartRowIndex: 7,
+    dataEndRowIndex: aoa.length - 1,
+    columnWidths: [11, 16, 28, 44, 8, 12, 9, 24, 14, 16, 40, 34, 14, 28, 18],
+    hiddenColumnIndexes: [14],
+  });
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, ws, "RAID Log");
+
+  const filename = `${sanitizeExcelFileNameSegment(meta.projectName)}_RAID_Log_${meta.generatedDateOnly}.xlsx`;
+  return { workbook, filename };
+}
+
+function phaseToLessonsLabel(phase) {
+  const normalized = normalizePhaseLabel(phase);
+  if (normalized === "M&C") return "Monitoring & Controlling";
+  if (normalized === "Closure") return "Closing";
+  return normalized;
+}
+
+function getPhaseDueDateForTemplate(phase, timelineIndex, fallbackDate = "") {
+  const normalized = normalizePhaseLabel(phase);
+  return timelineIndex.byPhase?.[normalized]?.dueDate || fallbackDate || "";
+}
+
+function hasPackDataIntegration(pack) {
+  const intake = pack?.intakeSnapshot || {};
+  const systems = Array.isArray(intake.systems) ? intake.systems : [];
+  const workstreams = getWorkstreamsData(pack);
+  return systems.length > 0 || workstreams.some((stream) => /data integration|data and reporting|migration|integration/i.test(stream.name || ""));
+}
+
+function hasPackSecurityStream(pack) {
+  const intake = pack?.intakeSnapshot || {};
+  const compliance = normalize(intake.constraints?.compliance);
+  const tech = normalize(intake.constraints?.tech);
+  const systems = Array.isArray(intake.systems) ? intake.systems : [];
+  return Boolean(compliance || /security|access|sso|identity|iam/i.test(`${tech} ${systems.join(" ")}`));
+}
+
+function getRaciRowDefinitions(pack) {
+  const includeData = hasPackDataIntegration(pack);
+  const includeSecurity = hasPackSecurityStream(pack);
+
+  return [
+    { key: "governance_cadence", label: "Governance & cadence" },
+    { key: "requirements_scope", label: "Requirements & scope" },
+    { key: "schedule_milestones", label: "Project schedule & milestones" },
+    { key: "technical_design", label: "Technical design" },
+    { key: "build_configuration", label: "Build/configuration" },
+    ...(includeData ? [{ key: "data_integration", label: "Data integration / migration" }] : []),
+    ...(includeSecurity ? [{ key: "security_access_sso", label: "Security / access / SSO" }] : []),
+    { key: "testing_uat", label: "Testing (UAT + technical)" },
+    { key: "training", label: "Training" },
+    { key: "communications", label: "Communications" },
+    { key: "deployment_golive", label: "Deployment / go-live" },
+    { key: "hypercare_stabilization", label: "Hypercare / stabilization" },
+    { key: "documentation_handoff", label: "Documentation & handoff" },
+  ];
+}
+
+function buildRaciAssignmentMap(rowKey, roles, pack) {
+  const hasVendor = roles.includes("Vendor");
+  const defaultMap = Object.fromEntries(roles.map((role) => [role, ""]));
+  const configByRow = {
+    governance_cadence: {
+      A: ["Project Sponsor", "Business Owner"],
+      R: ["Project Manager"],
+      C: ["Business Owner", "Technical Lead", "SMEs"],
+      I: ["Communications Lead", "Training Lead"],
+    },
+    requirements_scope: {
+      A: ["Business Owner", "Product Owner"],
+      R: ["Product Owner", "Business Analyst"],
+      C: ["Project Manager", "Technical Lead", "SMEs"],
+      I: ["Project Sponsor"],
+    },
+    schedule_milestones: {
+      A: ["Project Manager"],
+      R: ["Project Manager"],
+      C: ["Project Sponsor", "Technical Lead", "Business Owner"],
+      I: ["SMEs"],
+    },
+    technical_design: {
+      A: ["Technical Lead"],
+      R: ["Technical Lead", hasVendor ? "Vendor" : "Delivery Team"],
+      C: ["Project Manager", "Business Analyst", "SMEs"],
+      I: ["Project Sponsor", "Business Owner"],
+    },
+    build_configuration: {
+      A: ["Technical Lead"],
+      R: [hasVendor ? "Vendor" : "Delivery Team", "Technical Lead"],
+      C: ["Project Manager", "Data/Integration Lead", "Security/Compliance Lead"],
+      I: ["Business Owner"],
+    },
+    data_integration: {
+      A: ["Data/Integration Lead", "Technical Lead"],
+      R: ["Data/Integration Lead", "Delivery Team"],
+      C: ["Technical Lead", "Project Manager", "SMEs"],
+      I: ["Project Sponsor", "Business Owner"],
+    },
+    security_access_sso: {
+      A: ["Security/Compliance Lead", "Technical Lead"],
+      R: ["Security/Compliance Lead"],
+      C: ["Technical Lead", "Project Manager", "SMEs"],
+      I: ["Project Sponsor", "Business Owner"],
+    },
+    testing_uat: {
+      A: ["Business Owner", "Product Owner"],
+      R: ["Delivery Team", "Technical Lead"],
+      C: ["Project Manager", "SMEs", "Business Analyst"],
+      I: ["Project Sponsor"],
+    },
+    training: {
+      A: ["Training Lead", "Business Owner"],
+      R: ["Training Lead"],
+      C: ["Project Manager", "Communications Lead", "SMEs"],
+      I: ["Project Sponsor", "Operations Lead"],
+    },
+    communications: {
+      A: ["Communications Lead", "Project Manager"],
+      R: ["Communications Lead", "Project Manager"],
+      C: ["Project Sponsor", "Business Owner", "Training Lead"],
+      I: ["SMEs", "Operations Lead"],
+    },
+    deployment_golive: {
+      A: ["Project Manager", "Technical Lead"],
+      R: ["Technical Lead", "Operations Lead"],
+      C: ["Business Owner", "Security/Compliance Lead", "Communications Lead", "Training Lead"],
+      I: ["Project Sponsor", "SMEs"],
+    },
+    hypercare_stabilization: {
+      A: ["Operations Lead", "Project Manager"],
+      R: ["Operations Lead", "Technical Lead"],
+      C: ["Project Manager", "Business Owner", "SMEs"],
+      I: ["Project Sponsor"],
+    },
+    documentation_handoff: {
+      A: ["Project Manager", "Operations Lead"],
+      R: ["Project Manager", "Business Analyst", "Technical Lead"],
+      C: ["Operations Lead", "SMEs"],
+      I: ["Project Sponsor", "Business Owner"],
+    },
+  };
+
+  const config = configByRow[rowKey] || configByRow.schedule_milestones;
+  const pickFirstAvailable = (candidates = []) => candidates.find((role) => roles.includes(role));
+  const setCode = (role, code) => {
+    if (!role || !roles.includes(role)) return false;
+    if (defaultMap[role]) return false;
+    defaultMap[role] = code;
+    return true;
+  };
+
+  let accountable = pickFirstAvailable(config.A);
+  if (!accountable) accountable = roles.includes("Project Manager") ? "Project Manager" : roles[0];
+  if (accountable) {
+    defaultMap[accountable] = "A";
+  }
+
+  let responsibleAssigned = 0;
+  (config.R || []).forEach((role) => {
+    if (role === accountable) return;
+    if (setCode(role, "R")) responsibleAssigned += 1;
+  });
+  if (responsibleAssigned === 0) {
+    const fallbackResponsible = pickFirstAvailable(["Project Manager", "Technical Lead", "Business Analyst", "Delivery Team", "SMEs"]) || roles.find((role) => role !== accountable) || accountable;
+    if (fallbackResponsible) {
+      if (defaultMap[fallbackResponsible] === "") {
+        defaultMap[fallbackResponsible] = "R";
+      } else if (defaultMap[fallbackResponsible] !== "A") {
+        defaultMap[fallbackResponsible] = "R";
+      }
+      if (fallbackResponsible !== accountable) responsibleAssigned = 1;
+    }
+  }
+  if (responsibleAssigned === 0 && accountable) {
+    // Final fallback when only one role is available.
+    defaultMap[accountable] = "A/R";
+  }
+
+  (config.C || []).forEach((role) => setCode(role, "C"));
+  (config.I || []).forEach((role) => setCode(role, "I"));
+
+  return defaultMap;
+}
+
+function buildRaciWorkbook(pack, XLSX) {
+  const meta = getPackTemplateMeta(pack);
+  const roles = getTemplateRoles(pack);
+  const rowDefs = getRaciRowDefinitions(pack);
+  const columns = ["Deliverable / Workstream", ...roles];
+  const raciRows = rowDefs.map((rowDef) => {
+    const assignment = buildRaciAssignmentMap(rowDef.key, roles, pack);
+    return [rowDef.label, ...roles.map((role) => assignment[role] || "")];
+  });
+
+  const aoa = [
+    [`RACI Matrix — ${meta.projectName}`],
+    [],
+    ["Project Name", meta.projectName, "Generated Date", meta.generatedDate],
+    ["Complexity", meta.complexity, "Scenario", meta.scenario],
+    [],
+    columns,
+    ...raciRows,
+    [],
+    ["Legend"],
+    ["R", "Responsible (does the work)"],
+    ["A", "Accountable (exactly one per row)"],
+    ["C", "Consulted (two-way input)"],
+    ["I", "Informed (one-way update)"],
+  ];
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws["!merges"] = ws["!merges"] || [];
+  ws["!merges"].push({ s: { r: 0, c: 0 }, e: { r: 0, c: Math.max(0, columns.length - 1) } });
+  ws["!merges"].push({ s: { r: 8, c: 0 }, e: { r: 8, c: Math.max(0, columns.length - 1) } });
+  ws["!autofilter"] = {
+    ref: `${XLSX.utils.encode_cell({ r: 5, c: 0 })}:${XLSX.utils.encode_cell({ r: Math.max(5, 5 + raciRows.length), c: Math.max(0, columns.length - 1) })}`,
+  };
+  ws["!freeze"] = {
+    xSplit: 1,
+    ySplit: 6,
+    topLeftCell: XLSX.utils.encode_cell({ r: 6, c: 1 }),
+    activePane: "bottomRight",
+    state: "frozen",
+  };
+  ws["!cols"] = [
+    { wch: 36 },
+    ...roles.map(() => ({ wch: 15 })),
+  ];
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, ws, "RACI");
+  const filename = `${sanitizeExcelFileNameSegment(meta.projectName)}_RACI_${meta.generatedDateOnly}.xlsx`;
+  return { workbook, filename };
+}
+
+function getCurrentPhaseForLessons(pack, timeline = []) {
+  if (!timeline.length) return "Planning";
+  const statuses = timeline.map((item, index) => getPhaseProgressStatus(item, index, timeline));
+  let currentIndex = statuses.indexOf("In Progress");
+  if (currentIndex < 0) {
+    currentIndex = statuses.lastIndexOf("Complete");
+    currentIndex = currentIndex >= 0 ? Math.min(currentIndex + 1, timeline.length - 1) : 0;
+  }
+  return phaseToLessonsLabel(timeline[currentIndex]?.phase || timeline[currentIndex]?.stage || "Planning");
+}
+
+function buildLessonsLearnedSeedRows(pack) {
+  const meta = getPackTemplateMeta(pack);
+  const roles = getTemplateRoles(pack);
+  const timelineIndex = buildTimelinePhaseIndex(meta.timeline);
+  const intake = meta.intake;
+  const stakeholders = Array.isArray(intake.stakeholders) ? intake.stakeholders : [];
+  const systems = Array.isArray(intake.systems) ? intake.systems : [];
+  const constraints = intake.constraints || {};
+  const complexity = normalize(pack?.complexity) || "Standard";
+  const flaggedDrivers = (pack?.context?.failureDriverReview?.flagged || []).map((item) => ({
+    label: normalize(item.label),
+    level: normalize(item.level),
+    rationale: normalize(item.rationale),
+    owner: normalize(item.owner),
+  }));
+  const generatedDate = meta.generatedDateOnly;
+  const rows = [];
+
+  const addPrompt = (phase, topic, ownerHint, noteSeed) => {
+    rows.push({
+      Date: generatedDate,
+      Phase: phase,
+      "What Went Well": `Prompt starter: What worked well for ${topic} and should be repeated on future ${complexity.toLowerCase()} projects?`,
+      "What Didn’t Go Well": `Prompt starter: What challenges or delays affected ${topic}, especially across ${stakeholders.slice(0, 2).join(" and ") || "key stakeholders"}?`,
+      "Root Cause": "Prompt starter: Was the root cause related to planning, decision latency, resourcing, requirements clarity, or technology readiness?",
+      Impact: "Prompt starter: What was the impact on timeline, scope, quality, adoption, or compliance?",
+      Recommendation: `Prompt starter: What specific change should be made to improve ${topic} next time?`,
+      "Action Owner": pickTemplateOwnerForTopic(`${ownerHint} ${topic}`, roles),
+      "Action Due Date": getPhaseDueDateForTemplate(phase, timelineIndex, meta.targetDate),
+      Status: "Open",
+      Notes: noteSeed,
+    });
+  };
+
+  addPrompt("Initiation", "kickoff alignment, governance setup, and success criteria", "sponsor pm", "Tailored to project kickoff/governance setup.");
+  addPrompt("Planning", "requirements baseline and scope boundaries", "product owner business analyst", "Tailored to requirements/scope planning.");
+  addPrompt("Planning", "dependency mapping, resourcing, and milestone planning", "project manager", "Tailored to planning deliverables and timeline.");
+  if (systems.length || normalize(constraints.tech)) {
+    addPrompt("Execution", `technical design/build decisions across ${systems.slice(0, 2).join(" and ") || "the selected technology stack"}`, "technical lead data integration", "Tailored to systems/integration/technology signals.");
+  } else {
+    addPrompt("Execution", "implementation execution and cross-team handoffs", "technical lead project manager", "Tailored to execution workflow and handoffs.");
+  }
+  addPrompt("Monitoring & Controlling", "testing, readiness, communications, and training checkpoints", "training communications project manager", "Tailored to readiness and rollout planning.");
+  addPrompt("Closing", "go-live, hypercare, and operational handoff", "operations project manager", "Tailored to launch and handoff.");
+
+  flaggedDrivers.slice(0, 2).forEach((driver) => {
+    const phase = /planning|requirement|scope|resource/i.test(driver.label) ? "Planning" : "Monitoring & Controlling";
+    addPrompt(
+      phase,
+      `${driver.label.toLowerCase()} risk response`,
+      driver.owner || "project manager",
+      `Tailored to failure-driver review signal (${driver.level || "flagged"}): ${driver.rationale || driver.label}.`
+    );
+  });
+
+  return rows.slice(0, 8).map((row, index) => ({
+    ID: `LL-${String(index + 1).padStart(3, "0")}`,
+    ...row,
+  }));
+}
+
+function buildLessonsLearnedWorkbook(pack, XLSX) {
+  const meta = getPackTemplateMeta(pack);
+  const rows = buildLessonsLearnedSeedRows(pack);
+  const currentPhase = getCurrentPhaseForLessons(pack, meta.timeline);
+  const columns = [
+    "ID",
+    "Date",
+    "Phase",
+    "What Went Well",
+    "What Didn’t Go Well",
+    "Root Cause",
+    "Impact",
+    "Recommendation",
+    "Action Owner",
+    "Action Due Date",
+    "Status",
+    "Notes",
+  ];
+
+  const aoa = [
+    [`Lessons Learned — ${meta.projectName}`],
+    [],
+    ["Project Name", meta.projectName, "Phase", currentPhase],
+    ["Session Date", meta.generatedDateOnly, "Facilitator", "TBD"],
+    ["Generated Date", meta.generatedDate, "Version", meta.version],
+    [],
+    columns,
+    ...rows.map((row) => columns.map((column) => normalize(row[column]))),
+  ];
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  applyWorksheetStructure(XLSX, ws, {
+    totalColumns: columns.length,
+    titleRowIndex: 0,
+    headerRowIndex: 6,
+    dataStartRowIndex: 7,
+    dataEndRowIndex: aoa.length - 1,
+    columnWidths: [11, 12, 24, 38, 38, 34, 28, 34, 24, 14, 14, 28],
+  });
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, ws, "Lessons Learned");
+  const filename = `${sanitizeExcelFileNameSegment(meta.projectName)}_Lessons_Learned_${meta.generatedDateOnly}.xlsx`;
+  return { workbook, filename };
+}
+
 function normalizeMilestones(milestones = []) {
   if (!Array.isArray(milestones)) return [];
 
@@ -4439,6 +5344,7 @@ function renderSolutionPdfHeader(pack) {
 
 function renderSolutionPack(pack) {
   if (solutionDisclaimerEl) solutionDisclaimerEl.hidden = false;
+  syncExcelTemplatePanelVisibility();
   const scenario = pack.context?.scenarioType || "Cross-functional";
   const aiLabel = pack.aiMeta?.provider ? ` | AI: ${pack.aiMeta.provider}` : " | AI: Local assistant";
   solutionMetaEl.textContent = `${pack.title} | ${pack.complexity} complexity | ${scenario} | Generated ${formatDateTime(pack.createdAt)}${aiLabel}`;
@@ -4854,6 +5760,8 @@ function clearSessionData(statusMessage = "Session data cleared.") {
 
 function resetSolutionPackDisplays() {
   if (solutionDisclaimerEl) solutionDisclaimerEl.hidden = true;
+  syncExcelTemplatePanelVisibility();
+  setExcelTemplateButtonsState({ disabled: false });
   solutionMetaEl.textContent = "";
   if (solutionPdfProjectNameEl) solutionPdfProjectNameEl.textContent = "Project Name";
   if (solutionPdfProjectSummaryEl) {
