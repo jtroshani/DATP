@@ -2,21 +2,12 @@ const STORAGE_KEY = "cunySolutionPackHistorySession";
 const RETENTION_EXPIRY_KEY = "cunySessionRetentionExpiry";
 const SAMPLE_ROTATION_KEY = "cunySampleRotationNextIndex";
 const ANALYTICS_STORAGE_KEY = "cunyPmAppAnalyticsEvents";
-const ANALYTICS_AUTH_SESSION_KEY = "cunyPmAppAnalyticsAuth";
 const RETENTION_MS = 15 * 60 * 1000;
 const RETENTION_WARNING_MS = 60 * 1000;
 
 const ANALYTICS_EVENT_TYPES = {
-  formAccessed: "form_accessed",
+  formPageLoad: "form_page_load",
   generateClicked: "generate_solution_pack_clicked",
-};
-
-const ANALYTICS_ACCESS_CONFIG = {
-  username: "jetmir.troshani@cuny.edu",
-  // Default password: CunyAnalytics#2026. Change before publishing broadly.
-  passwordSha256: "e6a77f11dadba21805ff699d2ed226f9f25bdb471308f0dd800d1d2cedbb2e06",
-  requireIpMatch: false,
-  allowedIps: [],
 };
 
 const tabs = document.querySelectorAll(".tab-btn");
@@ -31,6 +22,7 @@ const intakeForm = document.getElementById("intakeForm");
 const followupQuestionsEl = document.getElementById("followupQuestions");
 const followupListEl = document.getElementById("followupList");
 const generationStatusEl = document.getElementById("generationStatus");
+const generateSolutionBtnEl = document.getElementById("generateSolutionBtn");
 const solutionMetaEl = document.getElementById("solutionMeta");
 const versionListEl = document.getElementById("versionList");
 const timelineVisualEl = document.getElementById("timelineVisual");
@@ -78,15 +70,8 @@ const aiAssistStatusEl = document.getElementById("aiAssistStatus");
 const generationLoaderEl = document.getElementById("generationLoader");
 const loaderProgressFillEl = document.getElementById("loaderProgressFill");
 const logoHomeTriggerEl = document.getElementById("logoHomeBtn") || document.querySelector(".header-logo");
-const analyticsAuthGateEl = document.getElementById("analyticsAuthGate");
 const analyticsContentEl = document.getElementById("analyticsContent");
-const analyticsLoginFormEl = document.getElementById("analyticsLoginForm");
-const analyticsUsernameEl = document.getElementById("analyticsUsername");
-const analyticsPasswordEl = document.getElementById("analyticsPassword");
-const analyticsAuthStatusEl = document.getElementById("analyticsAuthStatus");
 const analyticsRefreshEl = document.getElementById("analyticsRefresh");
-const analyticsLogoutEl = document.getElementById("analyticsLogout");
-const analyticsViewerMetaEl = document.getElementById("analyticsViewerMeta");
 const analyticsLastUpdatedEl = document.getElementById("analyticsLastUpdated");
 const analyticsFormTotalEl = document.getElementById("analyticsFormTotal");
 const analyticsGenerateTotalEl = document.getElementById("analyticsGenerateTotal");
@@ -98,6 +83,9 @@ const analyticsGenerateDailyEl = document.getElementById("analytics-generate-dai
 const analyticsGenerateWeeklyEl = document.getElementById("analytics-generate-weekly");
 const analyticsGenerateMonthlyEl = document.getElementById("analytics-generate-monthly");
 const analyticsGenerateTotalCellEl = document.getElementById("analytics-generate-total");
+const requiredIntakeFields = intakeForm
+  ? Array.from(intakeForm.querySelectorAll("input[required], textarea[required], select[required]"))
+  : [];
 
 const sectionEls = {
   sectionA: document.getElementById("sectionA"),
@@ -114,7 +102,6 @@ const state = {
   currentPack: null,
   versions: loadVersions(),
   analyticsEvents: loadAnalyticsEvents(),
-  analyticsAuth: loadAnalyticsAuth(),
   retentionExpiresAt: loadRetentionExpiry(),
   retentionWarningTimer: null,
   retentionCleanupTimer: null,
@@ -214,7 +201,7 @@ const SAMPLE_PROJECTS = [
     projectGoal: "Achieve 95% MFA enrollment for faculty, staff, and students before term start.",
     ownerName: "Jordan Patel",
     ownerArea: "Information Security",
-    problem: "The current identity security posture depends heavily on password-only access for several systems. Security incidents and audit findings require a staged MFA rollout with clear support and communication plans.",
+    problem: "The current identity security posture depends heavily on single-factor access for several systems. Security incidents and audit findings require a staged MFA rollout with clear support and communication plans.",
     outcomes: [
       "Deploy phased MFA enrollment by user segment",
       "Launch support playbooks for enrollment and account recovery",
@@ -324,9 +311,10 @@ init();
 function init() {
   followupQuestionsEl.classList.add("hidden");
   syncAIControls(true);
+  initializeIntakeValidation();
   attachEventHandlers();
   setActiveTab("intake");
-  trackAnalyticsEvent(ANALYTICS_EVENT_TYPES.formAccessed);
+  trackAnalyticsEvent(ANALYTICS_EVENT_TYPES.formPageLoad);
   setActiveSolutionTab("summary");
   if (state.versions.length > 0) {
     state.currentPack = state.versions[0];
@@ -337,7 +325,7 @@ function init() {
   }
   initializeRetentionLifecycle();
   renderVersionHistory();
-  renderAnalyticsAccessState();
+  renderAnalyticsCounts();
 }
 
 function attachEventHandlers() {
@@ -352,28 +340,10 @@ function attachEventHandlers() {
     });
   }
 
-  if (analyticsLoginFormEl) {
-    analyticsLoginFormEl.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      const username = normalize(analyticsUsernameEl?.value);
-      const password = analyticsPasswordEl?.value || "";
-      await handleAnalyticsLogin(username, password);
-    });
-  }
-
   if (analyticsRefreshEl) {
     analyticsRefreshEl.addEventListener("click", () => {
       state.analyticsEvents = loadAnalyticsEvents();
       renderAnalyticsCounts();
-    });
-  }
-
-  if (analyticsLogoutEl) {
-    analyticsLogoutEl.addEventListener("click", () => {
-      state.analyticsAuth = null;
-      persistAnalyticsAuth();
-      renderAnalyticsAccessState();
-      if (analyticsAuthStatusEl) analyticsAuthStatusEl.textContent = "Logged out of analytics.";
     });
   }
 
@@ -383,21 +353,45 @@ function attachEventHandlers() {
     });
   });
 
-  intakeForm.addEventListener("input", () => {
+  intakeForm.addEventListener("input", (event) => {
     if (hasAnySessionData()) {
       ensureRetentionWindowActive();
     }
+    const field = event.target;
+    if (requiredIntakeFields.includes(field)) {
+      field.dataset.touched = "true";
+    }
+    validateRequiredIntakeFields();
   });
 
-  intakeForm.addEventListener("change", () => {
+  intakeForm.addEventListener("change", (event) => {
     if (hasAnySessionData()) {
       ensureRetentionWindowActive();
     }
+    const field = event.target;
+    if (requiredIntakeFields.includes(field)) {
+      field.dataset.touched = "true";
+    }
+    validateRequiredIntakeFields();
+  });
+
+  requiredIntakeFields.forEach((field) => {
+    field.addEventListener("blur", () => {
+      field.dataset.touched = "true";
+      validateRequiredIntakeFields();
+    });
   });
 
   intakeForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (state.isGenerating) return;
+    const validation = validateRequiredIntakeFields({ showErrors: true });
+    if (!validation.isValid) {
+      generationStatusEl.textContent = "Please complete the required fields to continue.";
+      focusFirstInvalidIntakeField(validation.firstInvalidField);
+      return;
+    }
+
     trackAnalyticsEvent(ANALYTICS_EVENT_TYPES.generateClicked);
 
     state.aiConfig = getAIConfig();
@@ -408,6 +402,7 @@ function attachEventHandlers() {
     renderFollowUps(followups);
     generationStatusEl.textContent = "Generating solution pack...";
     state.isGenerating = true;
+    updateGenerateButtonState();
     startGenerationLoader();
     const minimumDelay = waitMs(5000);
     let generatedPack = null;
@@ -428,6 +423,7 @@ function attachEventHandlers() {
     } finally {
       stopGenerationLoader();
       state.isGenerating = false;
+      updateGenerateButtonState();
     }
 
     if (generatedPack) {
@@ -446,6 +442,8 @@ function attachEventHandlers() {
       populateSampleIntakeForm(sample);
       const intake = getIntakeData();
       renderFollowUps(buildFollowUpQuestions(intake));
+      resetIntakeValidationState();
+      validateRequiredIntakeFields();
       ensureRetentionWindowActive();
       generationStatusEl.textContent = `Sample loaded: ${sample.projectTitle}. Click Generate Solution Pack to create a complete example.`;
     });
@@ -631,6 +629,7 @@ function attachEventHandlers() {
       applyIntakeSuggestions(suggestions);
       const refreshedIntake = getIntakeData();
       renderFollowUps(buildFollowUpQuestions(refreshedIntake));
+      validateRequiredIntakeFields();
       if (hasAnySessionData()) ensureRetentionWindowActive();
       if (aiAssistStatusEl) aiAssistStatusEl.textContent = suggestions.summary;
     });
@@ -638,7 +637,6 @@ function attachEventHandlers() {
 }
 
 function setActiveTab(key) {
-  const previousActive = getActiveTabKey();
   tabs.forEach((tab) => {
     const isActive = tab.dataset.tab === key;
     tab.classList.toggle("active", isActive);
@@ -653,11 +651,9 @@ function setActiveTab(key) {
     panel.hidden = !isActive;
   });
 
-  if (key === "intake" && previousActive !== "intake") {
-    trackAnalyticsEvent(ANALYTICS_EVENT_TYPES.formAccessed);
-  }
   if (key === "analytics") {
-    renderAnalyticsAccessState();
+    state.analyticsEvents = loadAnalyticsEvents();
+    renderAnalyticsCounts();
   }
 }
 
@@ -716,29 +712,6 @@ function pruneAnalyticsEvents(events) {
     .map((item) => ({ type: item.type, ts: Number(item.ts) }));
 }
 
-function loadAnalyticsAuth() {
-  try {
-    const raw = sessionStorage.getItem(ANALYTICS_AUTH_SESSION_KEY);
-    const parsed = raw ? JSON.parse(raw) : null;
-    if (!parsed || parsed.username !== ANALYTICS_ACCESS_CONFIG.username) return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-function persistAnalyticsAuth() {
-  try {
-    if (!state.analyticsAuth) {
-      sessionStorage.removeItem(ANALYTICS_AUTH_SESSION_KEY);
-      return;
-    }
-    sessionStorage.setItem(ANALYTICS_AUTH_SESSION_KEY, JSON.stringify(state.analyticsAuth));
-  } catch {
-    // Ignore storage issues and keep runtime behavior intact.
-  }
-}
-
 function trackAnalyticsEvent(type) {
   const validTypes = Object.values(ANALYTICS_EVENT_TYPES);
   if (!validTypes.includes(type)) return;
@@ -749,7 +722,7 @@ function trackAnalyticsEvent(type) {
   ]);
   persistAnalyticsEvents();
 
-  if (getActiveTabKey() === "analytics" && state.analyticsAuth) {
+  if (getActiveTabKey() === "analytics") {
     renderAnalyticsCounts();
   }
 }
@@ -778,15 +751,16 @@ function countEventsTotal(type) {
 }
 
 function renderAnalyticsCounts() {
+  if (analyticsContentEl) analyticsContentEl.hidden = false;
   const now = new Date();
   const startOfTodayTs = startOfDay(now).getTime();
   const startOfWeekTs = getStartOfWeek(now).getTime();
   const startOfMonthTs = getStartOfMonth(now).getTime();
 
-  const formDaily = countEventsSince(ANALYTICS_EVENT_TYPES.formAccessed, startOfTodayTs);
-  const formWeekly = countEventsSince(ANALYTICS_EVENT_TYPES.formAccessed, startOfWeekTs);
-  const formMonthly = countEventsSince(ANALYTICS_EVENT_TYPES.formAccessed, startOfMonthTs);
-  const formTotal = countEventsTotal(ANALYTICS_EVENT_TYPES.formAccessed);
+  const formDaily = countEventsSince(ANALYTICS_EVENT_TYPES.formPageLoad, startOfTodayTs);
+  const formWeekly = countEventsSince(ANALYTICS_EVENT_TYPES.formPageLoad, startOfWeekTs);
+  const formMonthly = countEventsSince(ANALYTICS_EVENT_TYPES.formPageLoad, startOfMonthTs);
+  const formTotal = countEventsTotal(ANALYTICS_EVENT_TYPES.formPageLoad);
 
   const generateDaily = countEventsSince(ANALYTICS_EVENT_TYPES.generateClicked, startOfTodayTs);
   const generateWeekly = countEventsSince(ANALYTICS_EVENT_TYPES.generateClicked, startOfWeekTs);
@@ -805,119 +779,6 @@ function renderAnalyticsCounts() {
   if (analyticsFormTotalEl) analyticsFormTotalEl.textContent = String(formTotal);
   if (analyticsGenerateTotalEl) analyticsGenerateTotalEl.textContent = String(generateTotal);
   if (analyticsLastUpdatedEl) analyticsLastUpdatedEl.textContent = `Last updated: ${formatDateTime(new Date())}`;
-}
-
-function wildcardToRegex(pattern) {
-  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
-  return new RegExp(`^${escaped}$`);
-}
-
-function isIpAllowed(ip) {
-  const patterns = ANALYTICS_ACCESS_CONFIG.allowedIps || [];
-  if (!patterns.length) return true;
-  return patterns.some((pattern) => wildcardToRegex(pattern).test(ip));
-}
-
-async function fetchClientIpAddress() {
-  const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(), 4500);
-  try {
-    const response = await fetch("https://api.ipify.org?format=json", {
-      method: "GET",
-      signal: controller.signal,
-      cache: "no-store",
-    });
-    if (!response.ok) return "";
-    const payload = await response.json();
-    return normalize(payload?.ip);
-  } catch {
-    return "";
-  } finally {
-    window.clearTimeout(timeoutId);
-  }
-}
-
-async function sha256Hex(value) {
-  if (!window.crypto || !window.crypto.subtle) {
-    return "";
-  }
-  const text = new TextEncoder().encode(value || "");
-  const digest = await crypto.subtle.digest("SHA-256", text);
-  const bytes = Array.from(new Uint8Array(digest));
-  return bytes.map((byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
-async function handleAnalyticsLogin(username, password) {
-  if (!analyticsAuthStatusEl) return;
-  if (!username || !password) {
-    analyticsAuthStatusEl.textContent = "Enter both username and password.";
-    return;
-  }
-
-  analyticsAuthStatusEl.textContent = "Verifying access...";
-
-  const normalizedUsername = username.toLowerCase();
-  const expectedUsername = ANALYTICS_ACCESS_CONFIG.username.toLowerCase();
-  if (normalizedUsername !== expectedUsername) {
-    analyticsAuthStatusEl.textContent = "Access denied.";
-    if (analyticsPasswordEl) analyticsPasswordEl.value = "";
-    return;
-  }
-
-  const passwordHash = await sha256Hex(password);
-  if (!passwordHash) {
-    analyticsAuthStatusEl.textContent = "This browser does not support secure login checks.";
-    return;
-  }
-  if (passwordHash !== ANALYTICS_ACCESS_CONFIG.passwordSha256) {
-    analyticsAuthStatusEl.textContent = "Access denied.";
-    if (analyticsPasswordEl) analyticsPasswordEl.value = "";
-    return;
-  }
-
-  let detectedIp = "";
-  if (ANALYTICS_ACCESS_CONFIG.requireIpMatch) {
-    detectedIp = await fetchClientIpAddress();
-    if (!detectedIp) {
-      analyticsAuthStatusEl.textContent = "Could not verify IP address.";
-      if (analyticsPasswordEl) analyticsPasswordEl.value = "";
-      return;
-    }
-    if (!isIpAllowed(detectedIp)) {
-      analyticsAuthStatusEl.textContent = "IP address is not allowlisted for analytics access.";
-      if (analyticsPasswordEl) analyticsPasswordEl.value = "";
-      return;
-    }
-  }
-
-  state.analyticsAuth = {
-    username: ANALYTICS_ACCESS_CONFIG.username,
-    signedInAt: Date.now(),
-    ip: detectedIp,
-  };
-  persistAnalyticsAuth();
-  if (analyticsPasswordEl) analyticsPasswordEl.value = "";
-  if (analyticsAuthStatusEl) analyticsAuthStatusEl.textContent = "Access granted.";
-  renderAnalyticsAccessState();
-}
-
-function renderAnalyticsAccessState() {
-  const hasAccess = Boolean(state.analyticsAuth);
-  if (analyticsAuthGateEl) analyticsAuthGateEl.hidden = hasAccess;
-  if (analyticsContentEl) analyticsContentEl.hidden = !hasAccess;
-
-  if (!hasAccess) {
-    if (analyticsViewerMetaEl) analyticsViewerMetaEl.textContent = "";
-    return;
-  }
-
-  if (analyticsViewerMetaEl) {
-    const signedInAt = state.analyticsAuth?.signedInAt ? formatDateTime(state.analyticsAuth.signedInAt) : "Unknown";
-    const ipNote = state.analyticsAuth?.ip ? ` | IP: ${state.analyticsAuth.ip}` : "";
-    analyticsViewerMetaEl.textContent = `Signed in as ${state.analyticsAuth.username} | Since ${signedInAt}${ipNote}`;
-  }
-  state.analyticsEvents = loadAnalyticsEvents();
-  renderAnalyticsCounts();
 }
 
 function startGenerationLoader() {
@@ -1350,6 +1211,112 @@ function getIntakeData() {
     systems: toList(formData.get("systems")),
     risks: toList(formData.get("risks")),
   };
+}
+
+function initializeIntakeValidation() {
+  requiredIntakeFields.forEach((field) => {
+    if (!field.id) return;
+    if (field.dataset.baseDescribedby === undefined) {
+      field.dataset.baseDescribedby = normalize(field.getAttribute("aria-describedby"));
+    }
+  });
+  validateRequiredIntakeFields();
+}
+
+function resetIntakeValidationState() {
+  requiredIntakeFields.forEach((field) => {
+    field.dataset.touched = "false";
+    setIntakeFieldValidation(field, true, false);
+  });
+  updateGenerateButtonState();
+}
+
+function isRequiredFieldFilled(field) {
+  if (!field) return true;
+  const value = normalize(field.value);
+  if (field.tagName === "SELECT") return Boolean(value);
+  return Boolean(value);
+}
+
+function getRequiredFieldMessage(field) {
+  const label = normalize(field?.dataset?.requiredLabel) || "this field";
+  const lowerLabel = label.charAt(0).toLowerCase() + label.slice(1);
+  if (field?.type === "date") {
+    return `Please select ${lowerLabel}.`;
+  }
+  if (field?.tagName === "SELECT") {
+    return `Please choose ${lowerLabel}.`;
+  }
+  return `Please enter ${lowerLabel}.`;
+}
+
+function getFieldErrorElement(field) {
+  if (!field?.id) return null;
+  return document.getElementById(`error-${field.id}`);
+}
+
+function setIntakeFieldValidation(field, isValid, showError) {
+  if (!field) return;
+  const shouldShowError = showError && !isValid;
+  const errorEl = getFieldErrorElement(field);
+  const errorId = errorEl?.id || "";
+  const baseIds = normalize(field.dataset.baseDescribedby)
+    .split(/\s+/)
+    .filter(Boolean);
+  const describedByIds = shouldShowError && errorId
+    ? Array.from(new Set([...baseIds, errorId]))
+    : baseIds;
+
+  if (describedByIds.length) {
+    field.setAttribute("aria-describedby", describedByIds.join(" "));
+  } else {
+    field.removeAttribute("aria-describedby");
+  }
+
+  field.classList.toggle("field-invalid", shouldShowError);
+  field.setAttribute("aria-invalid", shouldShowError ? "true" : "false");
+  if (errorEl) {
+    errorEl.textContent = shouldShowError ? getRequiredFieldMessage(field) : "";
+  }
+}
+
+function updateGenerateButtonState() {
+  if (!generateSolutionBtnEl) return;
+  const allComplete = requiredIntakeFields.every((field) => isRequiredFieldFilled(field));
+  generateSolutionBtnEl.disabled = state.isGenerating || !allComplete;
+  generateSolutionBtnEl.setAttribute("aria-disabled", generateSolutionBtnEl.disabled ? "true" : "false");
+}
+
+function validateRequiredIntakeFields({ showErrors = false } = {}) {
+  let firstInvalidField = null;
+
+  requiredIntakeFields.forEach((field) => {
+    if (showErrors) {
+      field.dataset.touched = "true";
+    }
+    const isValid = isRequiredFieldFilled(field);
+    const touched = field.dataset.touched === "true";
+    setIntakeFieldValidation(field, isValid, showErrors || touched);
+    if (!isValid && !firstInvalidField) {
+      firstInvalidField = field;
+    }
+  });
+
+  updateGenerateButtonState();
+  return {
+    isValid: !firstInvalidField,
+    firstInvalidField,
+  };
+}
+
+function focusFirstInvalidIntakeField(field) {
+  if (!field) return;
+  const parentSection = field.closest("details");
+  if (parentSection && !parentSection.open) parentSection.open = true;
+  field.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+  window.setTimeout(() => {
+    field.focus({ preventScroll: true });
+  }, 180);
 }
 
 function populateSampleIntakeForm(sampleProject) {
@@ -3520,6 +3487,7 @@ function clearSessionData(statusMessage = "Session data cleared.") {
   persistVersions();
 
   if (intakeForm) intakeForm.reset();
+  resetIntakeValidationState();
   const defaultComplexity = document.querySelector('input[name="complexity"][value="Standard"]');
   if (defaultComplexity) defaultComplexity.checked = true;
 

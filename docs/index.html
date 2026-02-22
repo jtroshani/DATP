@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Project Management Solution Builder</title>
-    <link rel="stylesheet" href="styles.css?v=20260222b" />
+    <link rel="stylesheet" href="styles.css?v=20260222d" />
   </head>
   <body>
     <div class="app-shell">
@@ -54,45 +54,53 @@
       <main>
         <section class="tab-panel active" id="tab-intake" role="tabpanel" tabindex="0" aria-labelledby="tabbtn-intake">
           <form id="intakeForm" novalidate>
+            <p class="required-note"><span class="required-indicator" aria-hidden="true">*</span> Required fields</p>
             <details class="intake-section" open>
               <summary>Project basics</summary>
               <div class="intake-section-body">
                 <div class="grid two-col">
                   <label>
-                    Project title
-                    <input id="projectTitle" name="projectTitle" type="text" required />
+                    Project title <span class="required-indicator" aria-hidden="true">*</span>
+                    <input id="projectTitle" name="projectTitle" type="text" required data-required-label="Project title" />
+                    <span class="field-error" id="error-projectTitle" aria-live="polite"></span>
                   </label>
                   <label>
-                    One-sentence goal
-                    <input id="projectGoal" name="projectGoal" type="text" required />
+                    One-sentence goal <span class="required-indicator" aria-hidden="true">*</span>
+                    <input id="projectGoal" name="projectGoal" type="text" required data-required-label="One-sentence goal" />
+                    <span class="field-error" id="error-projectGoal" aria-live="polite"></span>
                   </label>
                 </div>
 
                 <div class="grid two-col">
                   <label>
-                    Business owner / sponsor (name)
-                    <input id="ownerName" name="ownerName" type="text" required />
+                    Business owner / sponsor (name) <span class="required-indicator" aria-hidden="true">*</span>
+                    <input id="ownerName" name="ownerName" type="text" required data-required-label="Business owner / sponsor name" />
+                    <span class="field-error" id="error-ownerName" aria-live="polite"></span>
                   </label>
                   <label>
-                    Business area
-                    <input id="ownerArea" name="ownerArea" type="text" required />
+                    Business area <span class="required-indicator" aria-hidden="true">*</span>
+                    <input id="ownerArea" name="ownerArea" type="text" required data-required-label="Business area" />
+                    <span class="field-error" id="error-ownerArea" aria-live="polite"></span>
                   </label>
                 </div>
 
                 <label>
-                  Problem / opportunity (2-3 lines)
-                  <textarea id="problem" name="problem" rows="4" required></textarea>
+                  Problem / opportunity (2-3 lines) <span class="required-indicator" aria-hidden="true">*</span>
+                  <textarea id="problem" name="problem" rows="4" required data-required-label="Problem / opportunity"></textarea>
+                  <span class="field-error" id="error-problem" aria-live="polite"></span>
                 </label>
 
                 <label>
-                  Desired outcomes (one per line)
+                  Desired outcomes (one per line) <span class="required-indicator" aria-hidden="true">*</span>
                   <textarea
                     id="outcomes"
                     name="outcomes"
                     rows="4"
                     required
+                    data-required-label="Desired outcomes"
                     placeholder="Example: Reduce intake cycle time to 5 business days"
                   ></textarea>
+                  <span class="field-error" id="error-outcomes" aria-live="polite"></span>
                 </label>
               </div>
             </details>
@@ -104,61 +112,75 @@
                   <legend>Constraints</legend>
                   <div class="grid two-col">
                     <label>
-                      Budget
+                      Budget <span class="required-indicator" aria-hidden="true">*</span>
                       <input
                         id="constraintBudget"
                         name="constraintBudget"
                         type="text"
+                        required
+                        data-required-label="Budget"
                         aria-describedby="example-budget"
                       />
                       <span class="field-example" id="example-budget">Example: Fixed at $120,000</span>
+                      <span class="field-error" id="error-constraintBudget" aria-live="polite"></span>
                     </label>
                     <label>
-                      Staffing needed (roles or teams)
+                      Staffing needed (roles or teams) <span class="required-indicator" aria-hidden="true">*</span>
                       <input
                         id="constraintStaffing"
                         name="constraintStaffing"
                         type="text"
+                        required
+                        data-required-label="Staffing needed"
                         aria-describedby="example-staffing"
                       />
                       <span class="field-example" id="example-staffing">Example: Existing teams and roles; add staff as necessary</span>
+                      <span class="field-error" id="error-constraintStaffing" aria-live="polite"></span>
                     </label>
                     <label>
-                      Compliance
+                      Compliance <span class="required-indicator" aria-hidden="true">*</span>
                       <input
                         id="constraintCompliance"
                         name="constraintCompliance"
                         type="text"
+                        required
+                        data-required-label="Compliance"
                         aria-describedby="example-compliance"
                       />
                       <span class="field-example" id="example-compliance">Example: FERPA and accessibility</span>
+                      <span class="field-error" id="error-constraintCompliance" aria-live="polite"></span>
                     </label>
                     <label>
-                      Technology
+                      Technology <span class="required-indicator" aria-hidden="true">*</span>
                       <input
                         id="constraintTech"
                         name="constraintTech"
                         type="text"
+                        required
+                        data-required-label="Technology"
                         aria-describedby="example-tech"
                       />
                       <span class="field-example" id="example-tech">Example: Must use CUNYfirst + Microsoft 365</span>
+                      <span class="field-error" id="error-constraintTech" aria-live="polite"></span>
                     </label>
                   </div>
                 </fieldset>
 
                 <div class="grid two-col">
                   <label>
-                    Target go-live date
-                    <input id="goLiveDate" name="goLiveDate" type="date" />
+                    Target go-live date <span class="required-indicator" aria-hidden="true">*</span>
+                    <input id="goLiveDate" name="goLiveDate" type="date" required data-required-label="Target go-live date" />
+                    <span class="field-error" id="error-goLiveDate" aria-live="polite"></span>
                   </label>
                   <label>
-                    Urgency
-                    <select id="urgency" name="urgency">
+                    Urgency <span class="required-indicator" aria-hidden="true">*</span>
+                    <select id="urgency" name="urgency" required data-required-label="Urgency">
                       <option value="Low">Low</option>
                       <option value="Moderate" selected>Moderate</option>
                       <option value="High">High</option>
                       <option value="Critical">Critical</option>
                     </select>
+                    <span class="field-error" id="error-urgency" aria-live="polite"></span>
                   </label>
                 </div>
               </div>
@@ -168,8 +190,9 @@
               <summary>Stakeholders and risk</summary>
               <div class="intake-section-body">
                 <label>
-                  Stakeholders (key groups)
-                  <textarea id="stakeholders" name="stakeholders" rows="3" required></textarea>
+                  Stakeholders (key groups) <span class="required-indicator" aria-hidden="true">*</span>
+                  <textarea id="stakeholders" name="stakeholders" rows="3" required data-required-label="Stakeholders"></textarea>
+                  <span class="field-error" id="error-stakeholders" aria-live="polite"></span>
                 </label>
 
                 <label>
@@ -208,7 +231,7 @@
 
             <div class="actions-row">
               <button class="secondary-btn" type="button" id="loadSampleData">Load Sample Data</button>
-              <button class="primary-btn" type="submit">Generate Solution Pack</button>
+              <button class="primary-btn" type="submit" id="generateSolutionBtn">Generate Solution Pack</button>
               <p id="generationStatus" aria-live="polite"></p>
             </div>
 
@@ -411,47 +434,21 @@
 
         <section class="tab-panel" id="tab-analytics" role="tabpanel" tabindex="0" aria-labelledby="tabbtn-analytics">
           <div class="analytics-header">
-            <h2>Private Analytics</h2>
-            <p class="helper-text">Admin-only usage dashboard for form access and solution generation activity.</p>
+            <h2>Analytics</h2>
+            <p class="helper-text">Public usage metrics. Counts only: form page loads and Generate Solution Pack clicks.</p>
           </div>
 
-          <div class="analytics-auth-gate" id="analyticsAuthGate">
-            <h3>Admin sign in</h3>
-            <p class="helper-text">Sign in to view daily, weekly, and monthly analytics.</p>
-            <form id="analyticsLoginForm" class="analytics-login-form" novalidate>
-              <label>
-                Admin username
-                <input id="analyticsUsername" type="text" autocomplete="username" required />
-              </label>
-              <label>
-                Admin password
-                <input id="analyticsPassword" type="password" autocomplete="current-password" required />
-              </label>
-              <div class="actions-row analytics-login-actions">
-                <button type="submit" class="primary-btn">Unlock Analytics</button>
-              </div>
-            </form>
-            <p id="analyticsAuthStatus" class="helper-text" aria-live="polite"></p>
-            <details class="analytics-security-note">
-              <summary>Security note</summary>
-              <p>
-                This static deployment uses client-side access controls. For strict enforcement, add hosting-level authentication or IP allowlisting.
-              </p>
-            </details>
-          </div>
-
-          <div class="analytics-content" id="analyticsContent" hidden>
+          <div class="analytics-content" id="analyticsContent">
             <div class="analytics-toolbar">
-              <p id="analyticsViewerMeta" class="helper-text"></p>
+              <p class="helper-text">No intake content, names, emails, or personal data are collected.</p>
               <div class="analytics-toolbar-actions">
                 <button type="button" class="secondary-btn" id="analyticsRefresh">Refresh</button>
-                <button type="button" class="secondary-btn" id="analyticsLogout">Log out</button>
               </div>
             </div>
 
             <div class="analytics-summary-grid">
               <article class="analytics-summary-card">
-                <p class="analytics-summary-label">Form Accessed</p>
+                <p class="analytics-summary-label">Form Page Loads</p>
                 <p class="analytics-summary-value" id="analyticsFormTotal">0</p>
                 <p class="analytics-summary-meta">Total tracked</p>
               </article>
@@ -475,7 +472,7 @@
                 </thead>
                 <tbody>
                   <tr>
-                    <th scope="row">Form accessed</th>
+                    <th scope="row">Form page loads</th>
                     <td id="analytics-form-daily">0</td>
                     <td id="analytics-form-weekly">0</td>
                     <td id="analytics-form-monthly">0</td>
@@ -522,6 +519,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=20260222b"></script>
+    <script src="app.js?v=20260222d"></script>
   </body>
 </html>
