@@ -463,7 +463,8 @@ function attachEventHandlers() {
   const loadSampleDataEl = document.getElementById("loadSampleData");
   if (loadSampleDataEl) {
     loadSampleDataEl.addEventListener("click", () => {
-      const sample = getNextSampleProject();
+      const sample = getRandomSampleProject();
+      if (!sample) return;
       populateSampleIntakeForm(sample);
       const intake = getIntakeData();
       renderFollowUps(buildFollowUpQuestions(intake));
@@ -1655,30 +1656,67 @@ function populateSampleIntakeForm(sampleProject) {
   });
 }
 
-function getNextSampleProject() {
-  const nextIndex = loadSampleRotationIndex();
-  const normalizedIndex = nextIndex >= 0 ? nextIndex % SAMPLE_PROJECTS.length : 0;
-  const sample = SAMPLE_PROJECTS[normalizedIndex];
-  const followingIndex = (normalizedIndex + 1) % SAMPLE_PROJECTS.length;
-  persistSampleRotationIndex(followingIndex);
-  return sample;
+function getRandomSampleProject() {
+  if (!Array.isArray(SAMPLE_PROJECTS) || SAMPLE_PROJECTS.length === 0) return null;
+
+  const sampleCount = SAMPLE_PROJECTS.length;
+  const { bag, lastIndex } = loadSampleRandomState();
+  let selectionBag = Array.isArray(bag) ? bag.filter((idx) => Number.isInteger(idx) && idx >= 0 && idx < sampleCount) : [];
+
+  if (!selectionBag.length) {
+    selectionBag = Array.from({ length: sampleCount }, (_, idx) => idx);
+  }
+
+  let pickPosition = Math.floor(Math.random() * selectionBag.length);
+  if (selectionBag.length > 1 && selectionBag[pickPosition] === lastIndex) {
+    const alternatePositions = [];
+    for (let i = 0; i < selectionBag.length; i += 1) {
+      if (selectionBag[i] !== lastIndex) alternatePositions.push(i);
+    }
+    if (alternatePositions.length) {
+      pickPosition = alternatePositions[Math.floor(Math.random() * alternatePositions.length)];
+    }
+  }
+
+  const selectedIndex = selectionBag[pickPosition];
+  selectionBag.splice(pickPosition, 1);
+  persistSampleRandomState({
+    bag: selectionBag,
+    lastIndex: selectedIndex,
+  });
+
+  return SAMPLE_PROJECTS[selectedIndex] || SAMPLE_PROJECTS[0];
 }
 
-function loadSampleRotationIndex() {
+function loadSampleRandomState() {
   try {
     const raw = sessionStorage.getItem(SAMPLE_ROTATION_KEY);
-    const index = Number(raw);
-    return Number.isInteger(index) && index >= 0 ? index : 0;
+    if (!raw) {
+      return { bag: [], lastIndex: -1 };
+    }
+
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object") {
+      return {
+        bag: Array.isArray(parsed.bag) ? parsed.bag : [],
+        lastIndex: Number.isInteger(parsed.lastIndex) ? parsed.lastIndex : -1,
+      };
+    }
   } catch {
-    return 0;
+    // Ignore parse errors and fall back to a fresh random bag.
   }
+
+  return { bag: [], lastIndex: -1 };
 }
 
-function persistSampleRotationIndex(index) {
+function persistSampleRandomState(randomState) {
   try {
-    sessionStorage.setItem(SAMPLE_ROTATION_KEY, String(index));
+    sessionStorage.setItem(SAMPLE_ROTATION_KEY, JSON.stringify({
+      bag: Array.isArray(randomState?.bag) ? randomState.bag : [],
+      lastIndex: Number.isInteger(randomState?.lastIndex) ? randomState.lastIndex : -1,
+    }));
   } catch {
-    // Ignore storage failures; rotation will restart from first sample.
+    // Ignore storage failures; random sample selection will still work per-click.
   }
 }
 
