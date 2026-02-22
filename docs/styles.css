@@ -2069,11 +2069,13 @@ body.is-preparing-pdf-layout .raid-list li {
 .raid-list {
   margin: 0;
   padding: 0.66rem 0.88rem 0.78rem;
+  list-style: none;
   display: grid;
   gap: 0.32rem;
 }
 
 .raid-list li {
+  list-style: none;
   color: var(--neutral-900);
   font-size: 0.84rem;
   line-height: 1.4;
