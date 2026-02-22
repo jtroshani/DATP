@@ -48,6 +48,7 @@ const exportPreviewEl = document.getElementById("exportPreview");
 const exportSolutionPdfEl = document.getElementById("exportSolutionPdf");
 const solutionPdfProjectNameEl = document.getElementById("solutionPdfProjectName");
 const solutionPdfProjectSummaryEl = document.getElementById("solutionPdfProjectSummary");
+const solutionPdfTocListEl = document.getElementById("solutionPdfTocList");
 const aiModeEl = document.getElementById("aiMode");
 const aiModelEl = document.getElementById("aiModel");
 const aiEndpointEl = document.getElementById("aiEndpoint");
@@ -388,6 +389,19 @@ function attachEventHandlers() {
     });
   }
 
+  if (solutionPdfTocListEl) {
+    solutionPdfTocListEl.addEventListener("click", (event) => {
+      const link = event.target.closest(".toc-link[data-toc-target]");
+      if (!link) return;
+      const targetId = normalize(link.getAttribute("data-toc-target"));
+      if (!targetId) return;
+      const moved = scrollToSolutionTocTarget(targetId);
+      if (moved) {
+        event.preventDefault();
+      }
+    });
+  }
+
   if (quickTogglePanelsEl) {
     quickTogglePanelsEl.addEventListener("click", () => {
       const collapseAll = quickTogglePanelsEl.dataset.mode !== "collapsed";
@@ -608,6 +622,239 @@ function stopGenerationLoader() {
   document.body.classList.remove("is-loading-solution");
 }
 
+function getPdfContentPageHeightPx() {
+  const pageHeightInches = 11;
+  const marginInches = 0.55;
+  const pxPerInch = 96;
+  return (pageHeightInches - marginInches * 2) * pxPerInch;
+}
+
+function isRenderableElement(element) {
+  if (!element) return false;
+  if (!element.isConnected) return false;
+  const style = window.getComputedStyle(element);
+  if (style.display === "none" || style.visibility === "hidden") return false;
+  return element.getBoundingClientRect().height > 0;
+}
+
+function isKeepTogetherBlock(element) {
+  if (!element) return false;
+  return element.id === "solutionPdfHeader" || element.id === "solutionPdfToc" || element.classList.contains("section-card");
+}
+
+function slugifyAnchorText(value) {
+  return normalize(value)
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function ensureTocAnchorId(element, fallback, usedIds) {
+  if (!element) return "";
+  if (element.id) {
+    usedIds.add(element.id);
+    element.setAttribute("data-toc-anchor", "true");
+    return element.id;
+  }
+
+  const base = slugifyAnchorText(element.textContent) || fallback || "section";
+  let candidate = `solution-${base}`;
+  let suffix = 2;
+
+  while (usedIds.has(candidate) || (document.getElementById(candidate) && document.getElementById(candidate) !== element)) {
+    candidate = `solution-${base}-${suffix}`;
+    suffix += 1;
+  }
+
+  element.id = candidate;
+  element.setAttribute("data-toc-anchor", "true");
+  usedIds.add(candidate);
+  return candidate;
+}
+
+function getSolutionPdfTocEntries() {
+  if (!panels.solution) return [];
+  const entries = [];
+  const panel = panels.solution;
+  const usedIds = new Set(Array.from(document.querySelectorAll("[id]")).map((node) => node.id));
+
+  const packHeading = panel.querySelector(".solution-header h2");
+  const packBlock = packHeading?.closest(".solution-header") || null;
+  if (packHeading && packBlock) {
+    const targetId = ensureTocAnchorId(packHeading, "project-management-solution-pack", usedIds);
+    entries.push({
+      title: normalize(packHeading.textContent) || "Project Management Solution Pack",
+      level: 0,
+      element: packHeading,
+      blockElement: packBlock,
+      targetId,
+    });
+  }
+
+  const sectionHeadings = Array.from(panel.querySelectorAll(".section-card > .card-header > h3"));
+  sectionHeadings.forEach((heading) => {
+    const parentCard = heading.closest(".section-card");
+    if (!parentCard) return;
+    const targetId = ensureTocAnchorId(heading, "section-heading", usedIds);
+    entries.push({
+      title: normalize(heading.textContent) || "Section",
+      level: 0,
+      element: heading,
+      blockElement: parentCard,
+      targetId,
+    });
+
+    const subHeadings = Array.from(parentCard.querySelectorAll(".chart-card h4"));
+    subHeadings.forEach((subHeading) => {
+      const subTargetId = ensureTocAnchorId(subHeading, "sub-section", usedIds);
+      entries.push({
+        title: normalize(subHeading.textContent) || "Sub-section",
+        level: 1,
+        element: subHeading,
+        blockElement: parentCard,
+        targetId: subTargetId,
+      });
+    });
+  });
+
+  return entries;
+}
+
+function getSolutionPdfPaginationBlocks(panel) {
+  if (!panel) return [];
+  const selector = "#solutionPdfHeader, #solutionPdfToc, .solution-header, #solutionMeta, .section-card";
+  return Array.from(panel.querySelectorAll(selector)).filter(isRenderableElement);
+}
+
+function getSolutionPdfBlockLayout(panel, pageHeightPx) {
+  const blocks = getSolutionPdfPaginationBlocks(panel);
+  const panelRect = panel.getBoundingClientRect();
+  const blockLayout = new Map();
+  let virtualCursorPx = 0;
+  let previousBottomPx = 0;
+
+  blocks.forEach((block) => {
+    const blockRect = block.getBoundingClientRect();
+    const blockTopPx = Math.max(0, blockRect.top - panelRect.top);
+    const blockBottomPx = Math.max(blockTopPx, blockRect.bottom - panelRect.top);
+    const blockHeightPx = Math.max(0, blockBottomPx - blockTopPx);
+    const gapBeforePx = Math.max(0, blockTopPx - previousBottomPx);
+
+    virtualCursorPx += gapBeforePx;
+
+    const pageOffsetPx = virtualCursorPx % pageHeightPx;
+    const keepTogether = isKeepTogetherBlock(block);
+    const shouldAdvancePage = keepTogether && pageOffsetPx > 0 && (blockHeightPx > pageHeightPx || pageOffsetPx + blockHeightPx > pageHeightPx);
+
+    if (shouldAdvancePage) {
+      virtualCursorPx += pageHeightPx - pageOffsetPx;
+    }
+
+    blockLayout.set(block, {
+      startPx: virtualCursorPx,
+      topPx: blockTopPx,
+    });
+
+    virtualCursorPx += blockHeightPx;
+    previousBottomPx = blockBottomPx;
+  });
+
+  return blockLayout;
+}
+
+function calculateSolutionPdfTocPageNumbers(entries) {
+  if (!panels.solution || !entries.length) return [];
+  const pageHeightPx = getPdfContentPageHeightPx();
+  const blockLayout = getSolutionPdfBlockLayout(panels.solution, pageHeightPx);
+
+  return entries.map((entry) => {
+    if (!entry?.element || !entry?.blockElement) return 1;
+    const blockInfo = blockLayout.get(entry.blockElement);
+    if (!blockInfo) return 1;
+
+    const entryRect = entry.element.getBoundingClientRect();
+    const blockRect = entry.blockElement.getBoundingClientRect();
+    const offsetWithinBlockPx = Math.max(0, entryRect.top - blockRect.top);
+    const absolutePrintPositionPx = blockInfo.startPx + offsetWithinBlockPx;
+    return Math.max(1, Math.floor(absolutePrintPositionPx / pageHeightPx) + 1);
+  });
+}
+
+function renderSolutionPdfToc(entries, pageNumbers = []) {
+  if (!solutionPdfTocListEl) return;
+  solutionPdfTocListEl.innerHTML = entries.map((entry, index) => {
+    const rowContent = `
+      <span class="toc-title">${escapeHtml(entry.title)}</span>
+      <span class="toc-leader" aria-hidden="true"></span>
+      <span class="toc-page">${String(pageNumbers[index] || 1)}</span>
+    `;
+    const targetId = normalize(entry.targetId);
+    const wrapped = targetId
+      ? `<a class="toc-link" href="#${escapeHtml(targetId)}" data-toc-target="${escapeHtml(targetId)}">${rowContent}</a>`
+      : `<span class="toc-link">${rowContent}</span>`;
+    return `<li class="toc-item ${entry.level > 0 ? "toc-sub" : ""}">${wrapped}</li>`;
+  }).join("");
+}
+
+function scrollToSolutionTocTarget(targetId) {
+  const target = document.getElementById(targetId);
+  if (!target) return false;
+
+  if (getActiveTabKey() !== "solution") {
+    setActiveTab("solution");
+  }
+
+  target.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" });
+  return true;
+}
+
+function buildSolutionPdfToc() {
+  if (!solutionPdfTocListEl || !panels.solution) return;
+
+  const entries = getSolutionPdfTocEntries();
+  if (!entries.length) {
+    solutionPdfTocListEl.innerHTML = `
+      <li class="toc-item">
+        <span class="toc-title">Project Management Solution Pack</span>
+        <span class="toc-leader" aria-hidden="true"></span>
+        <span class="toc-page">1</span>
+      </li>
+    `;
+    return;
+  }
+
+  const hadMeasurementClass = document.body.classList.contains("is-preparing-pdf-layout");
+  if (!hadMeasurementClass) {
+    document.body.classList.add("is-preparing-pdf-layout");
+  }
+
+  try {
+    let previousSignature = "";
+    for (let pass = 0; pass < 4; pass += 1) {
+      const pageNumbers = calculateSolutionPdfTocPageNumbers(entries);
+      renderSolutionPdfToc(entries, pageNumbers);
+
+      const signature = pageNumbers.join(",");
+      if (signature === previousSignature) break;
+      previousSignature = signature;
+    }
+  } finally {
+    if (!hadMeasurementClass) {
+      document.body.classList.remove("is-preparing-pdf-layout");
+    }
+  }
+}
+
+function escapeHtml(value) {
+  return (value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function exportSolutionPackPdf() {
   if (!panels.solution) {
     generationStatusEl.textContent = "Solution Pack view is not available for export.";
@@ -626,6 +873,7 @@ function exportSolutionPackPdf() {
   };
 
   setActiveTab("solution");
+  buildSolutionPdfToc();
   document.body.classList.add("print-solution-pack");
   generationStatusEl.textContent = "Preparing Solution Pack PDF export...";
 
@@ -1695,7 +1943,7 @@ async function enhancePackWithAI(pack, intake, followups, aiConfig) {
     const prompt = [
       "Return compact JSON only.",
       "You are enhancing a project management solution pack.",
-      "Do not rewrite sections A-G.",
+      "Do not rewrite existing sections.",
       "Create only one field: sectionH (AI insights and recommendations).",
       "Keep it direct, leadership-friendly, actionable, and concise.",
       "Include: readiness signal, top 5 actions, risk signal, and any missing critical clarifications.",
@@ -2162,11 +2410,11 @@ function renderEffortAllocationChart(pack, timeline, matrixRows) {
   if (!effortDonutEl || !effortLegendEl) return;
 
   const buckets = [
-    { key: "Initiation", color: "var(--accent-summary)" },
-    { key: "Planning", color: "var(--accent-governance)" },
-    { key: "Execution", color: "var(--accent-deliverables)" },
-    { key: "M&C", color: "var(--accent-risks)" },
-    { key: "Closure", color: "var(--accent-next)" },
+    { key: "Initiation", label: "Initiation", color: "var(--accent-summary)" },
+    { key: "Planning", label: "Planning", color: "var(--accent-governance)" },
+    { key: "Execution", label: "Execution", color: "var(--accent-deliverables)" },
+    { key: "M&C", label: "Monitoring & Controlling", color: "var(--accent-risks)" },
+    { key: "Closure", label: "Closure", color: "var(--accent-next)" },
   ];
 
   const totals = {};
@@ -2191,7 +2439,7 @@ function renderEffortAllocationChart(pack, timeline, matrixRows) {
     cursor = end;
 
     gradientStops.push(`${bucket.color} ${start.toFixed(2)}% ${end.toFixed(2)}%`);
-    legendItems.push(`<li><span class="legend-swatch" style="background:${bucket.color}"></span><span>${bucket.key}: ${percent}%</span></li>`);
+    legendItems.push(`<li><span class="legend-swatch" style="background:${bucket.color}"></span><span>${bucket.label}: ${percent}%</span></li>`);
   });
 
   effortDonutEl.style.background = `conic-gradient(${gradientStops.join(", ")})`;
@@ -2577,6 +2825,7 @@ function renderSolutionPack(pack) {
   if (sectionEls.sectionH) {
     sectionEls.sectionH.textContent = getAISectionText(pack);
   }
+  buildSolutionPdfToc();
   renderExportPreview(pack);
 }
 
@@ -2680,14 +2929,14 @@ function renderExportPreview(pack) {
   matrixBlock.appendChild(matrixWrap);
   exportPreviewEl.appendChild(matrixBlock);
 
-  addSection("A) Executive summary", getPackSection(pack, "sectionA"));
-  addSection("B) Governance + decision model", getPackSection(pack, "sectionB"));
-  addSection("C) Process model + mapping", getPackSection(pack, "sectionC"));
-  addSection("D) Planning deliverables", getPackSection(pack, "sectionD"));
-  addSection("E) Execution + accountability", getPackSection(pack, "sectionE"));
-  addSection("F) Expert collaboration recommendations", getPackSection(pack, "sectionF"));
-  addSection("G) Next steps", getPackSection(pack, "sectionG"));
-  addSection("H) AI insights and recommendations", aiSection);
+  addSection("Executive summary", getPackSection(pack, "sectionA"));
+  addSection("Governance + decision model", getPackSection(pack, "sectionB"));
+  addSection("Process model + mapping", getPackSection(pack, "sectionC"));
+  addSection("Planning deliverables", getPackSection(pack, "sectionD"));
+  addSection("Execution + accountability", getPackSection(pack, "sectionE"));
+  addSection("Expert collaboration recommendations", getPackSection(pack, "sectionF"));
+  addSection("Next steps", getPackSection(pack, "sectionG"));
+  addSection("AI insights and recommendations", aiSection);
 }
 
 function renderFullPackText(pack) {
@@ -2707,31 +2956,31 @@ function renderFullPackText(pack) {
     "Execution tracker matrix",
     renderMatrixText(matrix),
     "",
-    "A) Executive summary",
+    "Executive summary",
     getPackSection(pack, "sectionA"),
     "",
-    "B) Governance + decision model",
+    "Governance + decision model",
     getPackSection(pack, "sectionB"),
     "",
-    "C) Process model + mapping",
+    "Process model + mapping",
     getPackSection(pack, "sectionC"),
     "",
-    "D) Planning deliverables",
+    "Planning deliverables",
     getPackSection(pack, "sectionD"),
     "",
     "Workstreams",
     workstreams,
     "",
-    "E) Execution + accountability",
+    "Execution + accountability",
     getPackSection(pack, "sectionE"),
     "",
-    "F) Expert collaboration recommendations",
+    "Expert collaboration recommendations",
     getPackSection(pack, "sectionF"),
     "",
-    "G) Next steps",
+    "Next steps",
     getPackSection(pack, "sectionG"),
     "",
-    "H) AI insights and recommendations",
+    "AI insights and recommendations",
     aiSection,
   ].join("\n");
 }
@@ -2969,6 +3218,15 @@ function resetSolutionPackDisplays() {
   if (solutionPdfProjectNameEl) solutionPdfProjectNameEl.textContent = "Project Name";
   if (solutionPdfProjectSummaryEl) {
     solutionPdfProjectSummaryEl.textContent = "Generate a solution pack to prepare a distribution-ready PDF summary.";
+  }
+  if (solutionPdfTocListEl) {
+    solutionPdfTocListEl.innerHTML = `
+      <li class="toc-item">
+        <span class="toc-title">Generate a solution pack to build the table of contents.</span>
+        <span class="toc-leader" aria-hidden="true"></span>
+        <span class="toc-page">1</span>
+      </li>
+    `;
   }
   timelineVisualEl.innerHTML = '<li class="timeline-node timeline-empty">Generate a solution pack from Intake to view the timeline.</li>';
   if (timelineMetricsEl) timelineMetricsEl.innerHTML = "";

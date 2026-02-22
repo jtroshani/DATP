@@ -666,6 +666,225 @@ body.is-loading-solution {
   display: none;
 }
 
+.solution-pdf-toc {
+  display: none;
+}
+
+.solution-pdf-toc-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.toc-item {
+  margin: 0.2rem 0;
+}
+
+.toc-link {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.4rem;
+  color: inherit;
+  text-decoration: none;
+  border-radius: 6px;
+}
+
+a.toc-link {
+  cursor: pointer;
+}
+
+.toc-link:hover .toc-title {
+  text-decoration: underline;
+}
+
+.toc-link:focus-visible {
+  outline: 2px solid var(--cuny-blue);
+  outline-offset: 2px;
+}
+
+.toc-title {
+  min-width: 0;
+}
+
+.toc-leader {
+  border-bottom: 1px dotted color-mix(in srgb, var(--accent-4) 60%, var(--neutral-dove));
+  height: 1px;
+  transform: translateY(-1px);
+}
+
+.toc-page {
+  min-width: 1.65rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.toc-sub .toc-title {
+  padding-left: 1rem;
+}
+
+[data-toc-anchor="true"] {
+  scroll-margin-top: 0.7rem;
+}
+
+body.is-preparing-pdf-layout #tab-solution {
+  display: block !important;
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  width: 7.4in;
+  max-width: 7.4in;
+  min-width: 7.4in;
+  box-shadow: none;
+  border: none;
+  padding: 0;
+  background: #fff;
+  z-index: -1;
+}
+
+body.is-preparing-pdf-layout .solution-pdf-header {
+  display: block !important;
+  margin: 0 0 0.55rem;
+  padding: 0.52rem 0.64rem;
+  border: 1px solid #c9dced;
+  border-left: 5px solid var(--cuny-blue);
+  border-radius: 10px;
+  background: #f6faff;
+}
+
+body.is-preparing-pdf-layout .solution-pdf-header h1 {
+  margin: 0;
+  font-size: 14pt;
+  line-height: 1.2;
+  color: var(--cuny-blue-dark);
+}
+
+body.is-preparing-pdf-layout .solution-pdf-header p {
+  margin: 0.28rem 0 0;
+  font-size: 10pt;
+  line-height: 1.35;
+  color: #1f3e5f;
+}
+
+body.is-preparing-pdf-layout .solution-pdf-toc {
+  display: block !important;
+  margin: 0 0 0.55rem;
+  padding: 0.5rem 0.64rem 0.56rem;
+  border: 1px solid #d3e0ee;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+body.is-preparing-pdf-layout .solution-pdf-toc h2 {
+  margin: 0 0 0.22rem;
+  font-size: 11.5pt;
+  color: var(--cuny-blue-dark);
+}
+
+body.is-preparing-pdf-layout .toc-item {
+  margin: 0.14rem 0;
+  gap: 0.3rem;
+  font-size: 9.6pt;
+  line-height: 1.26;
+  color: #20354d;
+}
+
+body.is-preparing-pdf-layout .toc-sub .toc-title {
+  padding-left: 0.85rem;
+}
+
+body.is-preparing-pdf-layout .toc-page {
+  min-width: 1.4rem;
+  color: #1a3f67;
+  font-weight: 700;
+}
+
+body.is-preparing-pdf-layout .solution-actions,
+body.is-preparing-pdf-layout .copy-btn {
+  display: none !important;
+}
+
+body.is-preparing-pdf-layout .section-card {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+body.is-preparing-pdf-layout .timeline-rail {
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+}
+
+body.is-preparing-pdf-layout .matrix-wrap {
+  padding: 0 0.55rem 0.6rem;
+  overflow: visible !important;
+}
+
+body.is-preparing-pdf-layout .tracker-table {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+}
+
+body.is-preparing-pdf-layout .tracker-table th,
+body.is-preparing-pdf-layout .tracker-table td {
+  font-size: 8.9pt;
+  line-height: 1.24;
+  padding: 0.25rem 0.3rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  hyphens: auto;
+}
+
+body.is-preparing-pdf-layout .chart-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.42rem;
+  padding: 0.3rem 0.52rem 0.58rem;
+}
+
+body.is-preparing-pdf-layout .chart-grid .chart-card:nth-child(3) {
+  grid-column: 1 / -1;
+}
+
+body.is-preparing-pdf-layout .donut-layout {
+  grid-template-columns: minmax(0, 126px) minmax(0, 1fr);
+  gap: 0.55rem;
+  align-items: center;
+}
+
+body.is-preparing-pdf-layout .effort-donut {
+  width: 118px;
+  height: 118px;
+  margin: 0 auto;
+}
+
+body.is-preparing-pdf-layout .effort-donut::after {
+  width: 68px;
+  height: 68px;
+}
+
+body.is-preparing-pdf-layout .effort-donut span {
+  font-size: 0.78rem;
+}
+
+body.is-preparing-pdf-layout .chart-legend {
+  gap: 0.24rem;
+  align-content: start;
+  justify-items: start;
+}
+
+body.is-preparing-pdf-layout .chart-legend li {
+  font-size: 0.78rem;
+  line-height: 1.24;
+}
+
+body.is-preparing-pdf-layout .raid-list {
+  list-style: none;
+}
+
+body.is-preparing-pdf-layout .raid-list li {
+  list-style: none;
+}
+
 .quick-actions-bar {
   position: sticky;
   top: 0.45rem;
@@ -2107,7 +2326,7 @@ body.is-loading-solution {
 
 @media print {
   @page {
-    size: auto;
+    size: Letter portrait;
     margin: 0.55in;
   }
 
@@ -2174,6 +2393,47 @@ body.is-loading-solution {
     font-size: 10pt;
     line-height: 1.35;
     color: #1f3e5f;
+  }
+
+  body.print-solution-pack .solution-pdf-toc {
+    display: block !important;
+    margin: 0 0 0.55rem;
+    padding: 0.5rem 0.64rem 0.56rem;
+    border: 1px solid #d3e0ee;
+    border-radius: 10px;
+    background: #ffffff;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  body.print-solution-pack .solution-pdf-toc h2 {
+    margin: 0 0 0.22rem;
+    font-size: 11.5pt;
+    color: var(--cuny-blue-dark);
+  }
+
+  body.print-solution-pack .solution-pdf-toc-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  body.print-solution-pack .toc-item {
+    margin: 0.14rem 0;
+    gap: 0.3rem;
+    font-size: 9.6pt;
+    line-height: 1.26;
+    color: #20354d;
+  }
+
+  body.print-solution-pack .toc-sub .toc-title {
+    padding-left: 0.85rem;
+  }
+
+  body.print-solution-pack .toc-page {
+    min-width: 1.4rem;
+    color: #1a3f67;
+    font-weight: 700;
   }
 
   body.print-solution-pack .solution-actions,
@@ -2246,6 +2506,14 @@ body.is-loading-solution {
     white-space: normal;
   }
 
+  body.print-solution-pack .raid-list {
+    list-style: none;
+  }
+
+  body.print-solution-pack .raid-list li {
+    list-style: none;
+  }
+
   body.print-solution-pack .workstreams-list {
     padding: 0.5rem 0.62rem 0.58rem;
     gap: 0.32rem;
@@ -2269,6 +2537,48 @@ body.is-loading-solution {
 
   body.print-solution-pack .timeline-rail {
     grid-template-columns: repeat(1, minmax(0, 1fr));
+  }
+
+  body.print-solution-pack .chart-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.42rem;
+    padding: 0.3rem 0.52rem 0.58rem;
+  }
+
+  body.print-solution-pack .chart-grid .chart-card:nth-child(3) {
+    grid-column: 1 / -1;
+  }
+
+  body.print-solution-pack .donut-layout {
+    grid-template-columns: minmax(0, 126px) minmax(0, 1fr);
+    gap: 0.55rem;
+    align-items: center;
+  }
+
+  body.print-solution-pack .effort-donut {
+    width: 118px;
+    height: 118px;
+    margin: 0 auto;
+  }
+
+  body.print-solution-pack .effort-donut::after {
+    width: 68px;
+    height: 68px;
+  }
+
+  body.print-solution-pack .effort-donut span {
+    font-size: 9.2pt;
+  }
+
+  body.print-solution-pack .chart-legend {
+    gap: 0.24rem;
+    align-content: start;
+    justify-items: start;
+  }
+
+  body.print-solution-pack .chart-legend li {
+    font-size: 9pt;
+    line-height: 1.24;
   }
 
   .app-shell {
