@@ -64,6 +64,7 @@ const retentionStatusEl = document.getElementById("retentionStatus");
 const exportPreviewMetaEl = document.getElementById("exportPreviewMeta");
 const exportPreviewEl = document.getElementById("exportPreview");
 const exportSolutionPdfEl = document.getElementById("exportSolutionPdf");
+const exportSolutionDocsEl = document.getElementById("exportSolutionDocs");
 const solutionPdfProjectNameEl = document.getElementById("solutionPdfProjectName");
 const solutionPdfProjectSummaryEl = document.getElementById("solutionPdfProjectSummary");
 const solutionPdfTocListEl = document.getElementById("solutionPdfTocList");
@@ -165,6 +166,12 @@ const FEEDBACK_ENTRIES = [
     source: "MC",
     receivedAt: "2026-02-22",
     comment: "The Project Management Solution Builder is really helpful—it quickly creates a project plan and streamlines the process. My suggestion would be to add three dedicated sections for a RAID log, lessons learned, and a RACI chart, so the tool also provides organized documentation tailored to each project.",
+  },
+  {
+    id: "feedback-2026-02-23-mp-1",
+    source: "MP",
+    receivedAt: "2026-02-23",
+    comment: "Great work! Would be amazing if the export was in Docx",
   },
 ];
 
@@ -614,6 +621,13 @@ function attachEventHandlers() {
     exportSolutionPdfEl.addEventListener("click", () => {
       if (!ensurePackExists()) return;
       exportSolutionPackPdf();
+    });
+  }
+
+  if (exportSolutionDocsEl) {
+    exportSolutionDocsEl.addEventListener("click", () => {
+      if (!ensurePackExists()) return;
+      exportSolutionPackDocs();
     });
   }
 
@@ -1837,6 +1851,209 @@ function exportSolutionPackPdf() {
       generationStatusEl.textContent = "PDF export opened. Use Save as PDF in the print dialog.";
     });
   });
+}
+
+function exportSolutionPackDocs() {
+  if (!panels.solution) {
+    generationStatusEl.textContent = "Solution Pack view is not available for export.";
+    return;
+  }
+
+  const previousTab = getActiveTabKey();
+
+  try {
+    setActiveTab("solution");
+    generationStatusEl.textContent = "Preparing Solution Pack Docs export...";
+
+    const exportNode = buildSolutionPackDocsNode();
+    if (!exportNode) {
+      generationStatusEl.textContent = "Solution Pack export content is unavailable.";
+      return;
+    }
+
+    const html = buildSolutionPackDocsHtml(exportNode, state.currentPack);
+    const filename = buildSolutionPackDocsFilename(state.currentPack);
+    const blob = new Blob(["\ufeff", html], { type: "application/msword" });
+
+    downloadBlobFile(blob, filename);
+    generationStatusEl.textContent = "Docs export downloaded (.doc, Google Docs compatible).";
+  } catch {
+    generationStatusEl.textContent = "Could not export the Solution Pack to Docs. Please try again.";
+  } finally {
+    if (previousTab && previousTab !== "solution") {
+      setActiveTab(previousTab);
+    }
+  }
+}
+
+function buildSolutionPackDocsNode() {
+  if (!panels.solution) return null;
+
+  const sourceRoot = panels.solution;
+  const clonedRoot = sourceRoot.cloneNode(true);
+  inlineComputedStylesTree(sourceRoot, clonedRoot);
+  stripSolutionPackDocsControls(clonedRoot);
+  pruneHiddenElements(clonedRoot);
+
+  return clonedRoot;
+}
+
+function inlineComputedStylesTree(sourceNode, targetNode) {
+  if (!sourceNode || !targetNode) return;
+
+  if (sourceNode.nodeType === 1 && targetNode.nodeType === 1) {
+    const sourceEl = sourceNode;
+    const targetEl = targetNode;
+    const computed = window.getComputedStyle(sourceEl);
+
+    for (let propertyIndex = 0; propertyIndex < computed.length; propertyIndex += 1) {
+      const propertyName = computed[propertyIndex];
+      if (shouldSkipDocsComputedStyleProperty(propertyName)) continue;
+      targetEl.style.setProperty(propertyName, computed.getPropertyValue(propertyName));
+    }
+  }
+
+  const sourceChildren = sourceNode.childNodes || [];
+  const targetChildren = targetNode.childNodes || [];
+  const count = Math.min(sourceChildren.length, targetChildren.length);
+
+  for (let index = 0; index < count; index += 1) {
+    inlineComputedStylesTree(sourceChildren[index], targetChildren[index]);
+  }
+}
+
+function shouldSkipDocsComputedStyleProperty(propertyName) {
+  const prop = normalize(propertyName).toLowerCase();
+  return [
+    "width",
+    "height",
+    "min-width",
+    "max-width",
+    "min-height",
+    "max-height",
+    "inline-size",
+    "block-size",
+    "min-inline-size",
+    "max-inline-size",
+    "min-block-size",
+    "max-block-size",
+  ].includes(prop);
+}
+
+function stripSolutionPackDocsControls(rootEl) {
+  if (!rootEl) return;
+
+  rootEl.querySelectorAll(".solution-actions, .solution-pdf-header, .solution-pdf-toc, .excel-template-panel").forEach((el) => {
+    el.remove();
+  });
+
+  rootEl.querySelectorAll("button").forEach((button) => {
+    button.remove();
+  });
+}
+
+function pruneHiddenElements(rootEl) {
+  if (!rootEl) return;
+
+  rootEl.querySelectorAll("*").forEach((el) => {
+    if (el.hasAttribute("hidden")) {
+      el.remove();
+      return;
+    }
+
+    const inlineDisplay = normalize(el.style.display);
+    const inlineVisibility = normalize(el.style.visibility);
+    if (inlineDisplay === "none" || inlineVisibility === "hidden") {
+      el.remove();
+    }
+  });
+}
+
+function buildSolutionPackDocsHtml(exportNode, pack) {
+  const title = normalize(pack?.title) || "Project Management Solution Pack";
+  const createdLabel = formatDateTime(pack?.createdAt || Date.now());
+
+  return `<!doctype html>
+<html xmlns:o="urn:schemas-microsoft-com:office:office"
+      xmlns:w="urn:schemas-microsoft-com:office:word"
+      xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(title)} - Solution Pack</title>
+  <meta name="ProgId" content="Word.Document" />
+  <meta name="Generator" content="Project Management Solution Builder" />
+  <style>
+    @page { margin: 0.7in; }
+    body {
+      margin: 0;
+      background: #ffffff;
+      color: #122030;
+      font-family: "IBM Plex Sans", "Avenir Next", "Helvetica Neue", Arial, sans-serif;
+    }
+    .docs-export-shell {
+      max-width: 100%;
+    }
+    .docs-export-shell pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      margin: 0;
+    }
+    .docs-export-shell table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+  </style>
+</head>
+<body>
+  <div class="docs-export-shell">
+    <div style="margin: 0 0 16px; border-bottom: 2px solid #d7e3f0; padding-bottom: 10px;">
+      <div style="font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; color: #526b86; margin: 0 0 6px;">Project Management Solution Builder</div>
+      <h1 style="margin: 0; font-size: 24px; color: #102a43;">${escapeHtml(title)}</h1>
+      <p style="margin: 6px 0 0; color: #486581; font-size: 13px;">Generated ${escapeHtml(createdLabel)}</p>
+    </div>
+    ${exportNode.outerHTML}
+  </div>
+</body>
+</html>`;
+}
+
+function buildSolutionPackDocsFilename(pack) {
+  const titlePart = toFileSafeSegment(pack?.title || "solution-pack");
+  const datePart = formatFileDatePart(pack?.createdAt);
+  return `${titlePart}-solution-pack-${datePart}.doc`;
+}
+
+function toFileSafeSegment(value) {
+  const normalizedValue = normalize(value)
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return normalizedValue || "solution-pack";
+}
+
+function formatFileDatePart(dateValue) {
+  const parsed = new Date(dateValue || Date.now());
+  if (Number.isNaN(parsed.getTime())) return "export";
+
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const day = String(parsed.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function downloadBlobFile(blob, filename) {
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = objectUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.setTimeout(() => {
+    URL.revokeObjectURL(objectUrl);
+  }, 500);
 }
 
 function syncExcelTemplatePanelVisibility() {

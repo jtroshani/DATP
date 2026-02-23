@@ -1090,6 +1090,13 @@ body.is-loading-solution {
   gap: 0.5rem;
 }
 
+.solution-export-actions {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .solution-meta {
   margin-bottom: 0.9rem;
   color: var(--neutral-slate);
@@ -2481,9 +2488,22 @@ body.is-preparing-pdf-layout .raid-list li {
     width: 100%;
   }
 
-  .solution-actions .secondary-btn,
-  .solution-actions .primary-btn {
+  .solution-actions > .secondary-btn {
+    flex: 1 1 100%;
+    min-height: 44px;
+  }
+
+  .solution-export-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+  }
+
+  .solution-export-actions .secondary-btn,
+  .solution-export-actions .primary-btn {
     flex: 1 1 0;
+    min-width: 0;
     min-height: 44px;
   }
 

@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Project Management Solution Builder</title>
-    <link rel="stylesheet" href="styles.css?v=20260222r" />
+    <link rel="stylesheet" href="styles.css?v=20260223a" />
   </head>
   <body>
     <div class="app-shell">
@@ -245,13 +245,16 @@
         </section>
 
         <section class="tab-panel" id="tab-solution" role="tabpanel" tabindex="0" aria-labelledby="tabbtn-solution">
-          <div class="solution-header">
-            <h2>Project Management Solution Pack</h2>
-            <div class="solution-actions">
-              <button type="button" class="secondary-btn" id="copyFullPack">Copy Full Pack</button>
-              <button type="button" class="primary-btn" id="exportSolutionPdf">Export to PDF</button>
-            </div>
-          </div>
+	          <div class="solution-header">
+	            <h2>Project Management Solution Pack</h2>
+	            <div class="solution-actions">
+	              <button type="button" class="secondary-btn" id="copyFullPack">Copy Full Pack</button>
+	              <div class="solution-export-actions" role="group" aria-label="Solution pack export options">
+	                <button type="button" class="primary-btn" id="exportSolutionPdf">Export to PDF</button>
+	                <button type="button" class="secondary-btn" id="exportSolutionDocs">Export to Docs</button>
+	              </div>
+	            </div>
+	          </div>
           <div id="solutionMeta" class="solution-meta"></div>
           <div class="solution-disclaimer helper-text" role="note" aria-label="Solution pack generation disclaimer" hidden>
             This Solution Pack was generated based on the information provided in the intake form. As part of the generation process, the tool automatically checked the intake for common project risk drivers—Poor alignment, Bad planning, Lack of executive support, Incomplete requirements, Unclear expectations, Scope creep, Lack of resources, Choice of technology, and Inexperience—and used those signals to tailor recommended deliverables, governance, roles, timeline checkpoints, and next steps. Results are guidance-only and may require refinement with the project sponsor and stakeholders as additional details become available.
@@ -476,6 +479,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=20260222q"></script>
+    <script src="app.js?v=20260223a"></script>
   </body>
 </html>
