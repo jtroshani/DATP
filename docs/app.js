@@ -8,6 +8,7 @@ const ANALYTICS_SHARED_SITE_ID = "pm-solution-builder-ghpages-unified";
 const ANALYTICS_SHARED_NAMESPACE_PREFIX = "cuny-pm-solution-builder";
 const ANALYTICS_SHARED_CACHE_TTL_MS = 30 * 1000;
 const XLSX_BUNDLE_URL = "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
+const PPTXGEN_BUNDLE_URL = "https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js";
 const RETENTION_MS = 15 * 60 * 1000;
 const RETENTION_WARNING_MS = 60 * 1000;
 
@@ -73,6 +74,9 @@ const excelTemplatePanelEl = document.getElementById("solutionExcelTemplates");
 const downloadRaidExcelEl = document.getElementById("downloadRaidExcel");
 const downloadRaciExcelEl = document.getElementById("downloadRaciExcel");
 const downloadLessonsExcelEl = document.getElementById("downloadLessonsExcel");
+const downloadTeamsExcelEl = document.getElementById("downloadTeamsExcel");
+const downloadWorkstreamsExcelEl = document.getElementById("downloadWorkstreamsExcel");
+const downloadKickoffPptEl = document.getElementById("downloadKickoffPpt");
 const aiModeEl = document.getElementById("aiMode");
 const aiModelEl = document.getElementById("aiModel");
 const aiEndpointEl = document.getElementById("aiEndpoint");
@@ -144,6 +148,7 @@ const state = {
 
 let analyticsSharedNamespaceCache = "";
 let xlsxLoaderPromise = null;
+let pptxLoaderPromise = null;
 
 const SIMPLE_AI_DEFAULTS = {
   localModel: "local-heuristic-v2",
@@ -172,6 +177,12 @@ const FEEDBACK_ENTRIES = [
     source: "MP",
     receivedAt: "2026-02-23",
     comment: "Great work! Would be amazing if the export was in Docx",
+  },
+  {
+    id: "feedback-2026-02-24-jd-1",
+    source: "JD",
+    receivedAt: "2026-02-24",
+    comment: "This web tool looks promising. Could you also add downloadable templates for Teams, Workstreams, and a Kickoff Presentation?",
   },
 ];
 
@@ -646,6 +657,24 @@ function attachEventHandlers() {
   if (downloadLessonsExcelEl) {
     downloadLessonsExcelEl.addEventListener("click", () => {
       void runExcelTemplateDownload("lessons", downloadLessonsExcelEl, buildLessonsLearnedWorkbook);
+    });
+  }
+
+  if (downloadTeamsExcelEl) {
+    downloadTeamsExcelEl.addEventListener("click", () => {
+      void runExcelTemplateDownload("teams", downloadTeamsExcelEl, buildTeamsWorkbook);
+    });
+  }
+
+  if (downloadWorkstreamsExcelEl) {
+    downloadWorkstreamsExcelEl.addEventListener("click", () => {
+      void runExcelTemplateDownload("workstreams", downloadWorkstreamsExcelEl, buildWorkstreamsWorkbook);
+    });
+  }
+
+  if (downloadKickoffPptEl) {
+    downloadKickoffPptEl.addEventListener("click", () => {
+      void runKickoffPptTemplateDownload(downloadKickoffPptEl);
     });
   }
 
@@ -2062,7 +2091,7 @@ function syncExcelTemplatePanelVisibility() {
 }
 
 function setExcelTemplateButtonsState({ disabled = false, busyButton = null, busyLabel = "" } = {}) {
-  [downloadRaidExcelEl, downloadRaciExcelEl, downloadLessonsExcelEl].filter(Boolean).forEach((button) => {
+  [downloadRaidExcelEl, downloadRaciExcelEl, downloadLessonsExcelEl, downloadTeamsExcelEl, downloadWorkstreamsExcelEl].filter(Boolean).forEach((button) => {
     if (!button.dataset.defaultLabel) {
       button.dataset.defaultLabel = normalize(button.textContent) || "Download";
     }
@@ -2072,6 +2101,17 @@ function setExcelTemplateButtonsState({ disabled = false, busyButton = null, bus
     button.classList.toggle("is-busy", isBusy);
     button.textContent = isBusy && busyLabel ? busyLabel : button.dataset.defaultLabel;
   });
+}
+
+function setTemplateButtonState(button, { disabled = false, busy = false, busyLabel = "" } = {}) {
+  if (!button) return;
+  if (!button.dataset.defaultLabel) {
+    button.dataset.defaultLabel = normalize(button.textContent) || "Download";
+  }
+  button.disabled = disabled;
+  button.setAttribute("aria-disabled", disabled ? "true" : "false");
+  button.classList.toggle("is-busy", Boolean(busy));
+  button.textContent = busy && busyLabel ? busyLabel : button.dataset.defaultLabel;
 }
 
 function ensureXlsxLibrary() {
@@ -2109,6 +2149,51 @@ function ensureXlsxLibrary() {
   return xlsxLoaderPromise;
 }
 
+function ensurePptxLibrary() {
+  const getCtor = () => window.PptxGenJS || window.PptxgenJS || window.pptxgenjs;
+  const existingCtor = getCtor();
+  if (existingCtor) return Promise.resolve(existingCtor);
+  if (pptxLoaderPromise) return pptxLoaderPromise;
+
+  pptxLoaderPromise = new Promise((resolve, reject) => {
+    const existingScript = document.querySelector(`script[data-lib="pptxgenjs"][src="${PPTXGEN_BUNDLE_URL}"]`);
+    if (existingScript) {
+      existingScript.addEventListener("load", () => {
+        const ctor = getCtor();
+        if (ctor) {
+          resolve(ctor);
+          return;
+        }
+        reject(new Error("PPT library loaded but constructor is unavailable."));
+      }, { once: true });
+      existingScript.addEventListener("error", () => reject(new Error("Could not load PowerPoint library.")), { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = PPTXGEN_BUNDLE_URL;
+    script.async = true;
+    script.defer = true;
+    script.crossOrigin = "anonymous";
+    script.dataset.lib = "pptxgenjs";
+    script.onload = () => {
+      const ctor = getCtor();
+      if (ctor) {
+        resolve(ctor);
+        return;
+      }
+      reject(new Error("PowerPoint library loaded but PptxGenJS is unavailable."));
+    };
+    script.onerror = () => reject(new Error("Failed to load PowerPoint library."));
+    document.head.appendChild(script);
+  }).catch((error) => {
+    pptxLoaderPromise = null;
+    throw error;
+  });
+
+  return pptxLoaderPromise;
+}
+
 async function runExcelTemplateDownload(templateKey, buttonEl, workbookBuilder) {
   if (!state.currentPack) {
     generationStatusEl.textContent = "Generate a Solution Pack first.";
@@ -2120,7 +2205,11 @@ async function runExcelTemplateDownload(templateKey, buttonEl, workbookBuilder) 
     ? "Generating RAID..."
     : templateKey === "raci"
       ? "Generating RACI..."
-      : "Generating Lessons...";
+      : templateKey === "teams"
+        ? "Generating Teams..."
+        : templateKey === "workstreams"
+          ? "Generating Workstreams..."
+        : "Generating Lessons...";
 
   try {
     setExcelTemplateButtonsState({ disabled: true, busyButton: buttonEl, busyLabel });
@@ -2133,6 +2222,27 @@ async function runExcelTemplateDownload(templateKey, buttonEl, workbookBuilder) 
     generationStatusEl.textContent = "Could not generate the Excel template. Please try again.";
   } finally {
     setExcelTemplateButtonsState({ disabled: false });
+  }
+}
+
+async function runKickoffPptTemplateDownload(buttonEl) {
+  if (!state.currentPack) {
+    generationStatusEl.textContent = "Generate a Solution Pack first.";
+    return;
+  }
+  if (!buttonEl) return;
+
+  try {
+    setTemplateButtonState(buttonEl, { disabled: true, busy: true, busyLabel: "Generating PPT..." });
+    generationStatusEl.textContent = "Preparing kickoff presentation template...";
+    const PptxGenJS = await ensurePptxLibrary();
+    const { deck, filename } = buildKickoffPresentationDeck(state.currentPack, PptxGenJS);
+    await deck.writeFile({ fileName: filename });
+    generationStatusEl.textContent = `${buttonEl.dataset.defaultLabel || "Kickoff Presentation (PPT)"} downloaded.`;
+  } catch {
+    generationStatusEl.textContent = "Could not generate the kickoff presentation template. Please try again.";
+  } finally {
+    setTemplateButtonState(buttonEl, { disabled: false });
   }
 }
 
@@ -5444,6 +5554,682 @@ function buildLessonsLearnedWorkbook(pack, XLSX) {
   XLSX.utils.book_append_sheet(workbook, ws, "Lessons Learned");
   const filename = `${sanitizeExcelFileNameSegment(meta.projectName)}_Lessons_Learned_${meta.generatedDateOnly}.xlsx`;
   return { workbook, filename };
+}
+
+function sanitizeExcelSheetName(value, fallback = "Sheet") {
+  const cleaned = normalize(value || fallback)
+    .replace(/[:\\/?*\[\]]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const truncated = (cleaned || fallback).slice(0, 31).trim();
+  return truncated || fallback;
+}
+
+function appendWorkbookSheetUnique(XLSX, workbook, ws, baseName) {
+  const usedNames = new Set((workbook?.SheetNames || []).map((name) => normalize(name)));
+  let candidate = sanitizeExcelSheetName(baseName, "Sheet");
+  let counter = 2;
+  while (usedNames.has(candidate)) {
+    const suffix = ` ${counter}`;
+    candidate = sanitizeExcelSheetName(`${baseName}`.slice(0, Math.max(1, 31 - suffix.length)) + suffix, "Sheet");
+    counter += 1;
+  }
+  XLSX.utils.book_append_sheet(workbook, ws, candidate);
+  return candidate;
+}
+
+function buildBlankRows(count, factory) {
+  return Array.from({ length: Math.max(0, count) }, (_, index) => factory(index));
+}
+
+function buildTeamWorkbookGroupTabs(pack) {
+  const meta = getPackTemplateMeta(pack);
+  const intake = meta.intake || {};
+  const roles = getTemplateRoles(pack);
+  const timeline = getTimelineData(pack || {});
+  const matrix = getMatrixData(pack || {}, timeline);
+  const stakeholderNames = Array.isArray(intake.stakeholders) ? intake.stakeholders.map(normalize).filter(Boolean) : [];
+  const matrixOwnerLabels = Array.from(new Set(matrix.map((row) => normalize(row.owner)).filter(Boolean))).slice(0, 10);
+  const ownerName = normalize(intake.ownerName);
+  const ownerArea = normalize(intake.ownerArea);
+
+  const roleRows = (roleList, { prefillOwner = false } = {}) => roleList
+    .filter((role) => roles.includes(role))
+    .map((role) => ({
+      Name: prefillOwner && /Project Sponsor|Business Owner/.test(role) && ownerName ? ownerName : "",
+      Email: "",
+      Role: prefillOwner && role === "Business Owner" && ownerArea ? `${role} (${ownerArea})` : role,
+    }));
+
+  const steeringRows = [
+    ...(ownerName ? [{ Name: ownerName, Email: "", Role: ownerArea ? `Project Sponsor / Business Owner (${ownerArea})` : "Project Sponsor / Business Owner" }] : []),
+    ...roleRows(["Project Sponsor", "Business Owner"], { prefillOwner: false }),
+  ];
+
+  const coreTeamRows = roleRows(["Project Manager", "Product Owner", "Business Analyst"]);
+
+  const deliveryRoles = [
+    "Technical Lead",
+    "Delivery Team",
+    "Data/Integration Lead",
+    "Security/Compliance Lead",
+    "Communications Lead",
+    "Training Lead",
+    "Operations Lead",
+    "Vendor",
+  ];
+  const deliveryRows = roleRows(deliveryRoles);
+  matrixOwnerLabels.forEach((ownerLabel) => {
+    const roleGuess = canonicalizeRoleLabel(ownerLabel);
+    if (!roleGuess && !deliveryRows.some((row) => normalize(row.Role).toLowerCase() === ownerLabel.toLowerCase())) {
+      deliveryRows.push({ Name: "", Email: "", Role: ownerLabel });
+    }
+  });
+
+  const stakeholderRows = stakeholderNames.map((name) => ({ Name: name, Email: "", Role: "Stakeholder / SME" }));
+  if (roles.includes("SMEs") && !stakeholderRows.some((row) => /sme/i.test(row.Role))) {
+    stakeholderRows.push({ Name: "", Email: "", Role: "SMEs" });
+  }
+
+  return [
+    {
+      sheetName: "Steering Group",
+      title: "Steering Group",
+      description: "Sponsors, business owners, and executive approvers for key decisions.",
+      rows: steeringRows,
+    },
+    {
+      sheetName: "Core Project Team",
+      title: "Core Project Team",
+      description: "Primary project leadership and planning roles.",
+      rows: coreTeamRows,
+    },
+    {
+      sheetName: "Delivery Team",
+      title: "Delivery Team",
+      description: "Technical, delivery, and enablement roles supporting build and rollout.",
+      rows: deliveryRows,
+    },
+    {
+      sheetName: "Stakeholders & SMEs",
+      title: "Stakeholders & SMEs",
+      description: "Business participants, SMEs, and impacted stakeholders.",
+      rows: stakeholderRows,
+    },
+  ].map((tab) => ({
+    ...tab,
+    rows: [...tab.rows.slice(0, 12), ...buildBlankRows(Math.max(0, 8 - Math.min(12, tab.rows.length)), () => ({ Name: "", Email: "", Role: "" }))],
+  }));
+}
+
+function buildTeamsWorkbookWorkstreamRows(pack) {
+  const meta = getPackTemplateMeta(pack);
+  const timeline = getTimelineData(pack || {});
+  const matrix = getMatrixData(pack || {}, timeline);
+  const workstreams = getWorkstreamsData(pack || {});
+
+  const rows = workstreams.map((stream, index) => {
+    const timelineItem = timeline[index] || timeline[Math.min(index, Math.max(0, timeline.length - 1))] || null;
+    const relatedMatrixItems = matrix
+      .filter((row) => {
+        const owner = normalize(row.owner).toLowerCase();
+        const itemText = `${normalize(row.workItem)} ${normalize(row.dependencies)}`.toLowerCase();
+        const leadHint = normalize(stream.pendingOwner).toLowerCase();
+        const nameHint = normalize(stream.name).toLowerCase();
+        return (leadHint && owner.includes(leadHint.split(/\s+/)[0])) || (nameHint && itemText.includes(nameHint.split(/\s+/)[0]));
+      })
+      .slice(0, 2)
+      .map((row) => normalize(row.workItem))
+      .filter(Boolean);
+
+    const timelineMilestone = timelineItem
+      ? `Phase ${timelineItem.phaseNumber || index + 1}: ${normalize(timelineItem.milestone) || normalize(timelineItem.phase) || "Milestone"}`
+      : "";
+
+    const milestoneSeed = [
+      normalize(stream.focus),
+      timelineMilestone,
+      relatedMatrixItems.length ? `Linked deliverables: ${relatedMatrixItems.join("; ")}` : "",
+    ].filter(Boolean).join(" | ");
+
+    const deadline = toExcelDisplayDate(timelineItem?.targetISO || timelineItem?.targetDate || meta.targetDate) || meta.targetDate || "";
+
+    return {
+      "Workstream Name": normalize(stream.name) || `Workstream ${index + 1}`,
+      "Workstream Lead": normalize(stream.pendingOwner) || "To be assigned",
+      "Key Milestones": milestoneSeed || "Define key milestones for this workstream.",
+      Deadline: deadline,
+    };
+  });
+
+  if (rows.length) return rows.slice(0, 12);
+
+  return [
+    {
+      "Workstream Name": "Workstream 1",
+      "Workstream Lead": "To be assigned",
+      "Key Milestones": "Define kickoff milestone, planning checkpoint, and completion criteria.",
+      Deadline: meta.targetDate || "",
+    },
+    {
+      "Workstream Name": "Workstream 2",
+      "Workstream Lead": "To be assigned",
+      "Key Milestones": "Add workstream-specific milestones and dependencies.",
+      Deadline: meta.targetDate || "",
+    },
+    ...buildBlankRows(4, () => ({
+      "Workstream Name": "",
+      "Workstream Lead": "",
+      "Key Milestones": "",
+      Deadline: "",
+    })),
+  ];
+}
+
+function buildWorkstreamsWorkbook(pack, XLSX) {
+  const meta = getPackTemplateMeta(pack);
+  const timeline = getTimelineData(pack || {});
+  const matrix = getMatrixData(pack || {}, timeline);
+  const workstreams = getWorkstreamsData(pack || {});
+  const baseRows = buildTeamsWorkbookWorkstreamRows(pack);
+  const joinDistinct = (values, maxItems = 4) => Array.from(new Set(
+    (values || [])
+      .map((value) => normalize(value))
+      .filter(Boolean)
+  )).slice(0, maxItems).join("; ");
+
+  const columns = [
+    "Workstream ID",
+    "Workstream Name",
+    "Workstream Lead",
+    "Focus / Scope",
+    "Key Milestones",
+    "Deadline",
+    "Related Deliverables",
+    "Dependencies",
+    "Status",
+    "Notes",
+  ];
+
+  const rows = baseRows.map((baseRow, index) => {
+    const stream = workstreams[index] || {};
+    const workstreamName = normalize(baseRow["Workstream Name"]) || normalize(stream.name) || `Workstream ${index + 1}`;
+    const workstreamLead = normalize(baseRow["Workstream Lead"]) || normalize(stream.pendingOwner) || "To be assigned";
+    const focus = normalize(stream.focus);
+
+    const nameHints = normalize(workstreamName).toLowerCase().split(/\s+/).filter((token) => token.length > 3).slice(0, 2);
+    const leadHints = normalize(workstreamLead).toLowerCase().split(/\s+/).filter((token) => token.length > 2).slice(0, 2);
+    const focusHints = focus.toLowerCase().split(/\s+/).filter((token) => token.length > 4).slice(0, 2);
+    const allHints = [...nameHints, ...leadHints, ...focusHints];
+
+    const relatedRows = matrix.filter((row) => {
+      if (!allHints.length) return false;
+      const haystack = `${normalize(row.workItem)} ${normalize(row.owner)} ${normalize(row.dependencies)}`.toLowerCase();
+      return allHints.some((hint) => haystack.includes(hint));
+    }).slice(0, 4);
+
+    const fallbackTimelineItem = timeline[index] || timeline[Math.min(index, Math.max(0, timeline.length - 1))];
+    const deadline = normalize(baseRow.Deadline) || toExcelDisplayDate(fallbackTimelineItem?.targetISO || fallbackTimelineItem?.targetDate || meta.targetDate) || meta.targetDate || "";
+
+    return {
+      "Workstream ID": `WS-${String(index + 1).padStart(3, "0")}`,
+      "Workstream Name": workstreamName,
+      "Workstream Lead": workstreamLead,
+      "Focus / Scope": focus || "Refine scope, deliverables, and ownership for this workstream.",
+      "Key Milestones": normalize(baseRow["Key Milestones"]) || "Define kickoff, checkpoint, and completion milestones.",
+      Deadline: deadline,
+      "Related Deliverables": joinDistinct(relatedRows.map((row) => row.workItem), 4),
+      Dependencies: joinDistinct(relatedRows.map((row) => row.dependencies), 3),
+      Status: joinDistinct(relatedRows.map((row) => row.status), 2) || "Planned",
+      Notes: relatedRows.length ? "Seeded from tracker matrix and workstream recommendations." : "Confirm deliverables and dependencies during planning.",
+    };
+  });
+
+  const populatedRows = rows.length
+    ? rows
+    : matrix.slice(0, 8).map((row, index) => ({
+      "Workstream ID": `WS-${String(index + 1).padStart(3, "0")}`,
+      "Workstream Name": normalize(row.workItem) || `Workstream ${index + 1}`,
+      "Workstream Lead": normalize(row.owner) || "To be assigned",
+      "Focus / Scope": "Refine scope and outcomes for this workstream based on the solution pack.",
+      "Key Milestones": `Deliverable: ${normalize(row.workItem) || "Confirm milestone"}${normalize(row.dueDate) ? ` | Due ${normalize(row.dueDate)}` : ""}`,
+      Deadline: normalize(row.dueDate) || meta.targetDate || "",
+      "Related Deliverables": normalize(row.workItem),
+      Dependencies: normalize(row.dependencies),
+      Status: normalize(row.status) || "Planned",
+      Notes: "Seeded from execution tracker matrix.",
+    }));
+
+  const seededRows = [
+    ...populatedRows.slice(0, 15),
+    ...buildBlankRows(4, (index) => ({
+      "Workstream ID": `WS-${String(populatedRows.length + index + 1).padStart(3, "0")}`,
+      "Workstream Name": "",
+      "Workstream Lead": "",
+      "Focus / Scope": "",
+      "Key Milestones": "",
+      Deadline: "",
+      "Related Deliverables": "",
+      Dependencies: "",
+      Status: "",
+      Notes: "",
+    })),
+  ];
+
+  const aoa = [
+    [`Workstreams — ${meta.projectName}`],
+    [],
+    ["Project Name", meta.projectName, "Generated Date", meta.generatedDate],
+    ["Target Date", meta.targetDate, "Scenario", meta.scenario],
+    ["Instructions", "Update workstream leads, milestones, deadlines, and dependencies as planning decisions are finalized."],
+    [],
+    columns,
+    ...seededRows.map((row) => columns.map((column) => normalize(row[column]))),
+  ];
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  applyWorksheetStructure(XLSX, ws, {
+    totalColumns: columns.length,
+    titleRowIndex: 0,
+    headerRowIndex: 6,
+    dataStartRowIndex: 7,
+    dataEndRowIndex: aoa.length - 1,
+    columnWidths: [12, 28, 24, 34, 52, 16, 36, 34, 14, 34],
+  });
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, ws, "Workstreams");
+  const filename = `${sanitizeExcelFileNameSegment(meta.projectName)}_Workstreams_${meta.generatedDateOnly}.xlsx`;
+  return { workbook, filename };
+}
+
+function buildTeamsWorkbook(pack, XLSX) {
+  const meta = getPackTemplateMeta(pack);
+  const workbook = XLSX.utils.book_new();
+  const teamColumns = ["Name", "Email", "Role"];
+  const groupTabs = buildTeamWorkbookGroupTabs(pack);
+
+  groupTabs.forEach((tab) => {
+    const rows = Array.isArray(tab.rows) ? tab.rows : [];
+    const aoa = [
+      [`${tab.title} — ${meta.projectName}`],
+      [],
+      ["Project Name", meta.projectName, `Generated: ${meta.generatedDate}`],
+      ["Group", tab.title, `Owner / Sponsor: ${meta.sponsor}`],
+      ["Purpose", tab.description || "Document names, emails, and roles for this team/group.", ""],
+      [],
+      teamColumns,
+      ...rows.map((row) => teamColumns.map((column) => normalize(row[column]))),
+    ];
+
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    applyWorksheetStructure(XLSX, ws, {
+      totalColumns: teamColumns.length,
+      titleRowIndex: 0,
+      headerRowIndex: 6,
+      dataStartRowIndex: 7,
+      dataEndRowIndex: aoa.length - 1,
+      columnWidths: [26, 34, 30],
+    });
+    appendWorkbookSheetUnique(XLSX, workbook, ws, tab.sheetName || tab.title || "Team");
+  });
+
+  const workstreamColumns = ["Workstream Name", "Workstream Lead", "Key Milestones", "Deadline"];
+  const workstreamRows = buildTeamsWorkbookWorkstreamRows(pack);
+  const workstreamAoa = [
+    [`Workstreams — ${meta.projectName}`],
+    [],
+    ["Project Name", meta.projectName, "Generated Date", meta.generatedDate],
+    ["Target Date", meta.targetDate, "Scenario", meta.scenario],
+    ["Instructions", "Use this tab to track project-specific workstreams, owners, milestones, and deadlines."],
+    [],
+    workstreamColumns,
+    ...workstreamRows.map((row) => workstreamColumns.map((column) => normalize(row[column]))),
+  ];
+  const workstreamsWs = XLSX.utils.aoa_to_sheet(workstreamAoa);
+  applyWorksheetStructure(XLSX, workstreamsWs, {
+    totalColumns: workstreamColumns.length,
+    titleRowIndex: 0,
+    headerRowIndex: 6,
+    dataStartRowIndex: 7,
+    dataEndRowIndex: workstreamAoa.length - 1,
+    columnWidths: [28, 24, 56, 16],
+  });
+  appendWorkbookSheetUnique(XLSX, workbook, workstreamsWs, "Workstreams");
+
+  const filename = `${sanitizeExcelFileNameSegment(meta.projectName)}_Teams_Workstreams_${meta.generatedDateOnly}.xlsx`;
+  return { workbook, filename };
+}
+
+function compactSlideText(value, maxLength = 180) {
+  const text = normalize(value).replace(/\s+/g, " ");
+  if (!text) return "";
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
+}
+
+function extractSlideBulletLines(text, { maxItems = 5, maxLength = 140 } = {}) {
+  const source = (text || "").toString();
+  const lines = source
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => line.replace(/^[-*\u2022]\s*/, "").replace(/^\d+[\).\s-]+/, "").trim())
+    .filter(Boolean);
+
+  return lines.slice(0, maxItems).map((line) => compactSlideText(line, maxLength));
+}
+
+function renderSlideBulletBlock(lines, fallbackLine) {
+  const safeLines = (Array.isArray(lines) && lines.length ? lines : [fallbackLine]).filter(Boolean);
+  return safeLines.map((line) => `• ${line}`).join("\n");
+}
+
+function buildKickoffRaciSummaryLines(pack, roles) {
+  const selectedRoles = (roles || []).slice(0, 6);
+  if (!selectedRoles.length) return ["Add core roles to the RACI template and confirm A/R/C/I assignments."];
+
+  return getRaciRowDefinitions(pack)
+    .slice(0, 6)
+    .map((rowDef) => {
+      const assignmentMap = buildRaciAssignmentMap(rowDef.key, selectedRoles, pack);
+      const assignments = selectedRoles
+        .map((role) => ({ role, code: normalize(assignmentMap[role]) }))
+        .filter((item) => item.code)
+        .map((item) => `${compactSlideText(item.role, 18)}: ${item.code}`)
+        .join(" | ");
+      return `${rowDef.label} — ${assignments || "Assign A/R/C/I"}`;
+    });
+}
+
+function addKickoffPptSlideChrome(deck, slide, {
+  title = "Kickoff Presentation",
+  subtitle = "",
+  projectName = "Project",
+  slideNumber = 1,
+}) {
+  const pageWidth = 13.333;
+  const pageHeight = 7.5;
+  slide.addShape(deck.ShapeType.rect, { x: 0, y: 0, w: pageWidth, h: pageHeight, line: { color: "FFFFFF" }, fill: { color: "FFFFFF" } });
+  slide.addShape(deck.ShapeType.rect, { x: 0, y: 0, w: pageWidth, h: 0.92, line: { color: "0B4F8A" }, fill: { color: "0B4F8A" } });
+  slide.addShape(deck.ShapeType.rect, { x: 0, y: 0.92, w: pageWidth, h: 0.09, line: { color: "D6E8F8" }, fill: { color: "D6E8F8" } });
+  slide.addText(title, {
+    x: 0.45, y: 0.15, w: 8.8, h: 0.34,
+    color: "FFFFFF", fontFace: "Aptos", fontSize: 24, bold: true,
+  });
+  slide.addText(subtitle || "Tailored kickoff template generated from the Solution Pack", {
+    x: 0.45, y: 0.52, w: 10.8, h: 0.18,
+    color: "EAF3FB", fontFace: "Aptos", fontSize: 9.5,
+  });
+  slide.addText(projectName, {
+    x: 9.6, y: 0.18, w: 3.2, h: 0.4,
+    color: "FFFFFF", fontFace: "Aptos", fontSize: 10.5, bold: true, align: "right",
+  });
+  slide.addShape(deck.ShapeType.line, { x: 0.4, y: 7.02, w: 12.53, h: 0, line: { color: "D8E4EE", pt: 1 } });
+  slide.addText(`Project Management Solution Builder | Slide ${slideNumber}`, {
+    x: 0.45, y: 7.08, w: 12.2, h: 0.18,
+    color: "5E7085", fontFace: "Aptos", fontSize: 8.5,
+  });
+}
+
+function addKickoffPptContentPanel(deck, slide, { x, y, w, h, title, body, fill = "F8FBFF", line = "D7E6F3", titleColor = "163B63" }) {
+  const panelShape = deck?.ShapeType?.roundRect || deck?.ShapeType?.rect || "rect";
+  slide.addShape(panelShape, {
+    x, y, w, h,
+    rectRadius: 0.06,
+    line: { color: line, pt: 1 },
+    fill: { color: fill },
+  });
+  slide.addText(title, {
+    x: x + 0.16, y: y + 0.12, w: Math.max(0.2, w - 0.32), h: 0.26,
+    color: titleColor, fontFace: "Aptos", fontSize: 12, bold: true,
+  });
+  slide.addText(body, {
+    x: x + 0.16, y: y + 0.44, w: Math.max(0.2, w - 0.32), h: Math.max(0.2, h - 0.56),
+    color: "243B53", fontFace: "Aptos", fontSize: 9.5, valign: "top",
+  });
+}
+
+function buildKickoffPresentationDeck(pack, PptxGenJS) {
+  const deck = new PptxGenJS();
+  const meta = getPackTemplateMeta(pack);
+  const intake = meta.intake || {};
+  const timeline = getTimelineData(pack || {});
+  const matrix = getMatrixData(pack || {}, timeline);
+  const workstreams = getWorkstreamsData(pack || {});
+  const roles = getTemplateRoles(pack);
+  const raidSummary = getRaidSnapshotItems(pack).slice(0, 6);
+  const timelineSummary = timeline.slice(0, 7).map((item, index) => (
+    `Phase ${item.phaseNumber || index + 1} (${normalize(item.stage) || "Execution"}) - ${compactSlideText(item.milestone || item.phase || "Milestone", 64)} | ${compactSlideText(item.targetDate || "TBD", 20)}`
+  ));
+  const nextStepLines = extractSlideBulletLines(getPackSection(pack, "sectionG"), { maxItems: 6, maxLength: 120 });
+  const summaryLines = extractSlideBulletLines(getPackSection(pack, "sectionA"), { maxItems: 5, maxLength: 110 });
+  const workstreamLines = workstreams.slice(0, 8).map((stream, index) => {
+    const matchingTimeline = timeline[index] || timeline[Math.min(index, Math.max(0, timeline.length - 1))];
+    const dueLabel = matchingTimeline ? ` | Deadline: ${matchingTimeline.targetDate || "TBD"}` : "";
+    return `${stream.name || `Workstream ${index + 1}`} | Lead: ${stream.pendingOwner || "TBD"}${dueLabel}`;
+  });
+  const teamGroupTabs = buildTeamWorkbookGroupTabs(pack);
+  const teamSummaryLines = teamGroupTabs.map((tab) => {
+    const seededCount = (tab.rows || []).filter((row) => normalize(row.Name) || normalize(row.Email) || normalize(row.Role)).length;
+    return `${tab.title}: ${Math.max(1, seededCount)} starter row${seededCount === 1 ? "" : "s"} ready`;
+  });
+  const raciSummaryLines = buildKickoffRaciSummaryLines(pack, roles);
+  const projectOverviewBullets = [
+    compactSlideText(intake.projectGoal || pack?.title || meta.projectName, 150),
+    ...summaryLines,
+  ].filter(Boolean).slice(0, 6);
+  const outcomeBullets = Array.isArray(intake.outcomes) && intake.outcomes.length
+    ? intake.outcomes.slice(0, 6).map((item) => compactSlideText(item, 115))
+    : extractSlideBulletLines(getPackSection(pack, "sectionD"), { maxItems: 5, maxLength: 110 });
+
+  deck.layout = "LAYOUT_WIDE";
+  deck.author = "Project Management Solution Builder";
+  deck.company = "CUNY";
+  deck.subject = `Kickoff Presentation Template - ${meta.projectName}`;
+  deck.title = `${meta.projectName} - Kickoff Presentation`;
+  deck.lang = "en-US";
+
+  let slideNumber = 1;
+
+  const slide1 = deck.addSlide();
+  addKickoffPptSlideChrome(deck, slide1, {
+    title: "Project Overview",
+    subtitle: `Kickoff template | ${meta.complexity} complexity | ${meta.scenario}`,
+    projectName: meta.projectName,
+    slideNumber: slideNumber++,
+  });
+  addKickoffPptContentPanel(deck, slide1, {
+    x: 0.45, y: 1.2, w: 6.15, h: 2.25,
+    title: "Overview Summary",
+    body: renderSlideBulletBlock(projectOverviewBullets, "Add project purpose and summary points from the Solution Pack."),
+    fill: "F6FAFF",
+  });
+  addKickoffPptContentPanel(deck, slide1, {
+    x: 6.75, y: 1.2, w: 6.1, h: 2.25,
+    title: "Project Details",
+    body: [
+      `Project Name: ${meta.projectName}`,
+      `Sponsor / Owner: ${meta.sponsor}`,
+      `Target Date: ${meta.targetDate}`,
+      `Generated: ${meta.generatedDate}`,
+      "",
+      "Placeholder: Confirm success metrics, scope boundaries, and approvals before kickoff."
+    ].join("\n"),
+    fill: "FFFFFF",
+  });
+  addKickoffPptContentPanel(deck, slide1, {
+    x: 0.45, y: 3.62, w: 6.15, h: 2.9,
+    title: "Key Outcomes",
+    body: renderSlideBulletBlock(outcomeBullets, "Add expected outcomes and business value statements."),
+    fill: "FFFDF8",
+    line: "F2E7C9",
+  });
+  addKickoffPptContentPanel(deck, slide1, {
+    x: 6.75, y: 3.62, w: 6.1, h: 2.9,
+    title: "Kickoff Placeholders",
+    body: [
+      "• Meeting date/time:",
+      "• Attendees confirmed:",
+      "• Decision makers present:",
+      "• Risks requiring escalation:",
+      "• Open questions to resolve:",
+      "",
+      "Use this slide during kickoff and replace placeholders with project-specific details."
+    ].join("\n"),
+    fill: "F8FBFF",
+  });
+
+  const slide2 = deck.addSlide();
+  addKickoffPptSlideChrome(deck, slide2, {
+    title: "Key Workstreams",
+    subtitle: "Seeded from the generated Solution Pack workstream recommendations",
+    projectName: meta.projectName,
+    slideNumber: slideNumber++,
+  });
+  addKickoffPptContentPanel(deck, slide2, {
+    x: 0.45, y: 1.2, w: 12.4, h: 5.8,
+    title: "Workstream Breakdown",
+    body: renderSlideBulletBlock(
+      workstreamLines.length ? workstreamLines : ["Add project workstreams, leads, and milestone checkpoints."],
+      "Add project workstreams, leads, and milestone checkpoints."
+    ) + "\n\nUse the Teams (Excel) > Workstreams tab to maintain the detailed tracker.",
+    fill: "F7FBFF",
+  });
+
+  const slide3 = deck.addSlide();
+  addKickoffPptSlideChrome(deck, slide3, {
+    title: "Teams / Roles",
+    subtitle: "Starter team-group structure for staffing and coordination",
+    projectName: meta.projectName,
+    slideNumber: slideNumber++,
+  });
+  addKickoffPptContentPanel(deck, slide3, {
+    x: 0.45, y: 1.2, w: 6.1, h: 5.8,
+    title: "Roles in Scope",
+    body: renderSlideBulletBlock(
+      roles.slice(0, 12).map((role) => role),
+      "Add core roles and named team members."
+    ),
+    fill: "FFFFFF",
+  });
+  addKickoffPptContentPanel(deck, slide3, {
+    x: 6.75, y: 1.2, w: 6.1, h: 5.8,
+    title: "Teams Workbook Tabs",
+    body: renderSlideBulletBlock(teamSummaryLines, "Populate Steering, Core Team, Delivery Team, and Stakeholders tabs.") +
+      "\n\nPlaceholder: Add names, emails, and confirmed roles before kickoff distribution.",
+    fill: "F6FAFF",
+  });
+
+  const slide4 = deck.addSlide();
+  addKickoffPptSlideChrome(deck, slide4, {
+    title: "RAID Summary",
+    subtitle: "Top seeded RAID items for kickoff discussion and ownership confirmation",
+    projectName: meta.projectName,
+    slideNumber: slideNumber++,
+  });
+  addKickoffPptContentPanel(deck, slide4, {
+    x: 0.45, y: 1.2, w: 8.05, h: 5.8,
+    title: "RAID Snapshot",
+    body: renderSlideBulletBlock(
+      raidSummary.map((item) => compactSlideText(item, 180)),
+      "Add the top risks/issues/assumptions/dependencies to review at kickoff."
+    ),
+    fill: "FFF9F7",
+    line: "F0D9D2",
+  });
+  addKickoffPptContentPanel(deck, slide4, {
+    x: 8.7, y: 1.2, w: 4.15, h: 5.8,
+    title: "Facilitator Notes",
+    body: [
+      "• Confirm owner for each high-priority item",
+      "• Set review cadence (weekly/biweekly)",
+      "• Escalation threshold and path",
+      "• Agree status definitions",
+      "",
+      "Placeholder: Add RAID decisions and action IDs during kickoff."
+    ].join("\n"),
+    fill: "FFFFFF",
+  });
+
+  const slide5 = deck.addSlide();
+  addKickoffPptSlideChrome(deck, slide5, {
+    title: "RACI Chart Summary",
+    subtitle: "Starter accountability assignments based on generated project roles",
+    projectName: meta.projectName,
+    slideNumber: slideNumber++,
+  });
+  addKickoffPptContentPanel(deck, slide5, {
+    x: 0.45, y: 1.2, w: 12.4, h: 4.9,
+    title: "RACI Summary (Starter View)",
+    body: renderSlideBulletBlock(raciSummaryLines, "Add RACI responsibilities for key workstreams."),
+    fill: "F7FBFF",
+  });
+  addKickoffPptContentPanel(deck, slide5, {
+    x: 0.45, y: 6.2, w: 12.4, h: 0.75,
+    title: "Legend / Placeholder",
+    body: "R = Responsible | A = Accountable | C = Consulted | I = Informed | Confirm final assignments in the RACI Excel template before publishing.",
+    fill: "FFFFFF",
+  });
+
+  const slide6 = deck.addSlide();
+  addKickoffPptSlideChrome(deck, slide6, {
+    title: "Timeline Overview",
+    subtitle: "Milestones and target dates seeded from the solution pack timeline",
+    projectName: meta.projectName,
+    slideNumber: slideNumber++,
+  });
+  addKickoffPptContentPanel(deck, slide6, {
+    x: 0.45, y: 1.2, w: 8.0, h: 5.8,
+    title: "Milestones",
+    body: renderSlideBulletBlock(timelineSummary, "Add kickoff timeline milestones and target dates."),
+    fill: "FFFFFF",
+  });
+  addKickoffPptContentPanel(deck, slide6, {
+    x: 8.65, y: 1.2, w: 4.2, h: 5.8,
+    title: "Timeline Notes",
+    body: [
+      `Target Date: ${meta.targetDate}`,
+      `Complexity: ${meta.complexity}`,
+      "",
+      "Placeholder: Confirm milestone owners, dependencies, and checkpoint cadence.",
+      "",
+      `Work items in tracker: ${matrix.length || 0}`,
+    ].join("\n"),
+    fill: "F6FAFF",
+  });
+
+  const slide7 = deck.addSlide();
+  addKickoffPptSlideChrome(deck, slide7, {
+    title: "Next Steps",
+    subtitle: "Immediate actions to launch execution after kickoff",
+    projectName: meta.projectName,
+    slideNumber: slideNumber++,
+  });
+  addKickoffPptContentPanel(deck, slide7, {
+    x: 0.45, y: 1.2, w: 7.8, h: 5.8,
+    title: "Recommended Next Steps",
+    body: renderSlideBulletBlock(nextStepLines, "Add immediate post-kickoff actions and due dates."),
+    fill: "F8FFF8",
+    line: "D7EDD9",
+  });
+  addKickoffPptContentPanel(deck, slide7, {
+    x: 8.45, y: 1.2, w: 4.4, h: 5.8,
+    title: "Customize Before Sending",
+    body: [
+      "• Add presenter names and contact info",
+      "• Replace placeholders with final decisions",
+      "• Confirm team roster and emails",
+      "• Attach RAID/RACI/Teams Excel templates",
+      "• Save final deck version for distribution",
+      "",
+      `Generated from: ${compactSlideText(meta.projectName, 55)}`,
+    ].join("\n"),
+    fill: "FFFFFF",
+  });
+
+  const filename = `${sanitizeExcelFileNameSegment(meta.projectName)}_Kickoff_Presentation_${meta.generatedDateOnly}.pptx`;
+  return { deck, filename };
 }
 
 function normalizeMilestones(milestones = []) {
