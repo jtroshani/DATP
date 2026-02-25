@@ -1011,6 +1011,50 @@ button {
   background: linear-gradient(180deg, #fbfdff 0%, #f4f9ff 100%);
 }
 
+.intake-helper-toolbar {
+  margin: 0 0 0.95rem;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.intake-helper-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.intake-helper-card {
+  border: 1px solid #d8e4ef;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 0.75rem;
+  display: grid;
+  align-content: start;
+  gap: 0.48rem;
+}
+
+.intake-helper-card .secondary-btn {
+  justify-self: start;
+}
+
+.helper-text.intake-helper-copy {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.36;
+  color: #355372;
+}
+
+.helper-text.intake-helper-status {
+  margin: 0;
+  min-height: 1.1rem;
+  font-size: 0.86rem;
+  color: #1b4a76;
+}
+
+.helper-text.intake-helper-status:empty {
+  min-height: 0;
+}
+
 .generation-loader {
   position: fixed;
   inset: 0;
@@ -2480,6 +2524,10 @@ body.is-preparing-pdf-layout .raid-list li {
     margin-top: 1rem;
     max-width: none;
   }
+
+  .intake-helper-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 768px) {
@@ -2572,6 +2620,15 @@ body.is-preparing-pdf-layout .raid-list li {
   .actions-row .primary-btn,
   .actions-row .secondary-btn {
     min-height: 48px;
+  }
+
+  .intake-helper-card .secondary-btn {
+    width: 100%;
+    text-align: left;
+  }
+
+  .helper-text.intake-helper-copy {
+    font-size: 0.8rem;
   }
 
   .complexity-options {

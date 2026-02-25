@@ -556,7 +556,7 @@ function attachEventHandlers() {
       validateRequiredIntakeFields();
       updateComplexityGuidance();
       ensureRetentionWindowActive();
-      generationStatusEl.textContent = `Sample loaded: ${sample.projectTitle}. Click Generate Solution Pack to create a complete example.`;
+      generationStatusEl.textContent = `Sample project data loaded: ${sample.projectTitle}. Click Generate Solution Pack to create a complete example.`;
     });
   }
 
@@ -775,8 +775,8 @@ function attachEventHandlers() {
       const intake = getIntakeData();
       if (aiAssistStatusEl) {
         aiAssistStatusEl.textContent = state.aiConfig.mode === "local"
-          ? "Generating smart local suggestions..."
-          : "Generating provider-backed suggestions...";
+          ? "Generating AI guidance suggestions for missing/weak intake fields..."
+          : "Generating provider-backed AI guidance suggestions...";
       }
 
       const suggestions = await generateIntakeSuggestions(intake, state.aiConfig);

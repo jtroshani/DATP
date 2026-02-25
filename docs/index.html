@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Project Management Solution Builder</title>
-    <link rel="stylesheet" href="styles.css?v=20260224c" />
+    <link rel="stylesheet" href="styles.css?v=20260224d" />
   </head>
   <body>
     <div class="app-shell">
@@ -61,6 +61,26 @@
 
       <main>
         <section class="tab-panel active" id="tab-intake" role="tabpanel" tabindex="0" aria-labelledby="tabbtn-intake">
+          <section class="ai-assist-box intake-helper-toolbar" aria-label="Intake helper tools">
+            <div class="intake-helper-grid">
+              <div class="intake-helper-card">
+                <button class="secondary-btn" type="button" id="aiSuggestIntake" aria-describedby="aiSuggestIntakeHelp">
+                  AI Suggest Missing Intake Guidance
+                </button>
+                <p class="helper-text intake-helper-copy" id="aiSuggestIntakeHelp">
+                  AI-generated suggestions only. This guides what kind of information to enter in missing or weak fields; it does not load actual project data.
+                </p>
+              </div>
+              <div class="intake-helper-card">
+                <button class="secondary-btn" type="button" id="loadSampleData" aria-describedby="loadProjectDataHelp">Load Project Data</button>
+                <p class="helper-text intake-helper-copy" id="loadProjectDataHelp">
+                  Loads a sample project into the intake so you can preview a completed form and test the workflow. It does not import your own files.
+                </p>
+              </div>
+            </div>
+            <p id="aiAssistStatus" class="helper-text intake-helper-status" aria-live="polite"></p>
+          </section>
+
           <form id="intakeForm" novalidate>
             <p class="required-note"><span class="required-indicator" aria-hidden="true">*</span> Required fields</p>
             <details class="intake-section" open>
@@ -247,17 +267,9 @@
             <p id="retentionStatus" class="retention-status" aria-live="polite"></p>
 
             <div class="actions-row">
-              <button class="secondary-btn" type="button" id="loadSampleData">Load Sample Data</button>
               <button class="primary-btn" type="submit" id="generateSolutionBtn">Generate Solution Pack</button>
               <p id="generationStatus" aria-live="polite"></p>
             </div>
-
-            <section class="ai-assist-box" aria-label="AI assist">
-              <div class="actions-row">
-                <button class="secondary-btn" type="button" id="aiSuggestIntake">AI Suggest Missing Intake Fields</button>
-                <p id="aiAssistStatus" class="helper-text" aria-live="polite"></p>
-              </div>
-            </section>
           </form>
 
           <aside class="followup-questions" id="followupQuestions" aria-live="polite">
@@ -274,7 +286,7 @@
 	              <button type="button" class="secondary-btn" id="copyFullPack">Copy Full Pack</button>
 	              <div class="solution-export-actions" role="group" aria-label="Solution pack export options">
 	                <button type="button" class="primary-btn" id="exportSolutionPdf">Export to PDF</button>
-	                <button type="button" class="secondary-btn" id="exportSolutionDocs">Export to Docs</button>
+	                <button type="button" class="secondary-btn" id="exportSolutionDocs">Export to Word</button>
 	              </div>
 	            </div>
 	          </div>
@@ -505,6 +517,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=20260224f"></script>
+    <script src="app.js?v=20260224g"></script>
   </body>
 </html>
