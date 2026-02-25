@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Project Management Solution Builder</title>
-    <link rel="stylesheet" href="styles.css?v=20260224b" />
+    <link rel="stylesheet" href="styles.css?v=20260224c" />
   </head>
   <body>
     <div class="app-shell">
@@ -41,6 +41,14 @@
               <span>Enterprise</span>
             </label>
           </div>
+          <div class="complexity-guidance">
+            <p class="complexity-recommendation" id="complexityRecommendation" aria-live="polite"></p>
+            <ul class="complexity-guidance-list">
+              <li><strong>Light:</strong> Single-team work with limited dependencies and low delivery risk.</li>
+              <li><strong>Standard:</strong> Cross-team coordination, moderate risk, or timeline pressure.</li>
+              <li><strong>Enterprise:</strong> Multi-team initiatives with major dependencies, compliance, or high impact.</li>
+            </ul>
+          </div>
         </div>
       </header>
 
@@ -60,12 +68,12 @@
               <div class="intake-section-body">
                 <div class="grid two-col">
                   <label>
-                    Project title <span class="required-indicator" aria-hidden="true">*</span>
+                    <span class="field-label-text">Project title <span class="required-indicator" aria-hidden="true">*</span></span>
                     <input id="projectTitle" name="projectTitle" type="text" required data-required-label="Project title" />
                     <span class="field-error" id="error-projectTitle" aria-live="polite"></span>
                   </label>
                   <label>
-                    One-sentence goal <span class="required-indicator" aria-hidden="true">*</span>
+                    <span class="field-label-text">One-sentence goal <span class="required-indicator" aria-hidden="true">*</span></span>
                     <input id="projectGoal" name="projectGoal" type="text" required data-required-label="One-sentence goal" />
                     <span class="field-error" id="error-projectGoal" aria-live="polite"></span>
                   </label>
@@ -73,25 +81,25 @@
 
                 <div class="grid two-col">
                   <label>
-                    Business owner / sponsor (name) <span class="required-indicator" aria-hidden="true">*</span>
+                    <span class="field-label-text">Business owner / sponsor (name) <span class="required-indicator" aria-hidden="true">*</span></span>
                     <input id="ownerName" name="ownerName" type="text" required data-required-label="Business owner / sponsor name" />
                     <span class="field-error" id="error-ownerName" aria-live="polite"></span>
                   </label>
                   <label>
-                    Business area <span class="required-indicator" aria-hidden="true">*</span>
+                    <span class="field-label-text">Business area <span class="required-indicator" aria-hidden="true">*</span></span>
                     <input id="ownerArea" name="ownerArea" type="text" required data-required-label="Business area" />
                     <span class="field-error" id="error-ownerArea" aria-live="polite"></span>
                   </label>
                 </div>
 
                 <label>
-                  Problem / opportunity (2-3 lines) <span class="required-indicator" aria-hidden="true">*</span>
+                  <span class="field-label-text">Problem / opportunity (2-3 lines) <span class="required-indicator" aria-hidden="true">*</span></span>
                   <textarea id="problem" name="problem" rows="4" required data-required-label="Problem / opportunity"></textarea>
                   <span class="field-error" id="error-problem" aria-live="polite"></span>
                 </label>
 
                 <label>
-                  Desired outcomes (one per line) <span class="required-indicator" aria-hidden="true">*</span>
+                  <span class="field-label-text">Desired outcomes (one per line) <span class="required-indicator" aria-hidden="true">*</span></span>
                   <textarea
                     id="outcomes"
                     name="outcomes"
@@ -112,7 +120,7 @@
                   <legend>Constraints</legend>
                   <div class="grid two-col">
                     <label>
-                      Budget <span class="required-indicator" aria-hidden="true">*</span>
+                      <span class="field-label-text">Budget <span class="required-indicator" aria-hidden="true">*</span></span>
                       <input
                         id="constraintBudget"
                         name="constraintBudget"
@@ -125,7 +133,7 @@
                       <span class="field-error" id="error-constraintBudget" aria-live="polite"></span>
                     </label>
                     <label>
-                      Staffing needed (roles or teams) <span class="required-indicator" aria-hidden="true">*</span>
+                      <span class="field-label-text">Staffing needed (roles or teams) <span class="required-indicator" aria-hidden="true">*</span></span>
                       <input
                         id="constraintStaffing"
                         name="constraintStaffing"
@@ -162,12 +170,12 @@
 
                 <div class="grid two-col">
                   <label>
-                    Target go-live date <span class="required-indicator" aria-hidden="true">*</span>
+                    <span class="field-label-text">Target go-live date <span class="required-indicator" aria-hidden="true">*</span></span>
                     <input id="goLiveDate" name="goLiveDate" type="date" required data-required-label="Target go-live date" />
                     <span class="field-error" id="error-goLiveDate" aria-live="polite"></span>
                   </label>
                   <label>
-                    Urgency <span class="required-indicator" aria-hidden="true">*</span>
+                    <span class="field-label-text">Urgency <span class="required-indicator" aria-hidden="true">*</span></span>
                     <select id="urgency" name="urgency" required data-required-label="Urgency">
                       <option value="Low">Low</option>
                       <option value="Moderate" selected>Moderate</option>
@@ -177,6 +185,21 @@
                     <span class="field-error" id="error-urgency" aria-live="polite"></span>
                   </label>
                 </div>
+
+                <label>
+                  <span class="field-label-text">Go-live date justification <span class="required-indicator" aria-hidden="true">*</span></span>
+                  <textarea
+                    id="goLiveDateJustification"
+                    name="goLiveDateJustification"
+                    rows="3"
+                    required
+                    data-required-label="Go-live date justification"
+                    aria-describedby="example-goLiveDateJustification"
+                    placeholder="Example: Required before fall semester registration opens and tied to leadership commitment."
+                  ></textarea>
+                  <span class="field-example" id="example-goLiveDateJustification">What is driving this date (semester start, compliance deadline, contract milestone, funding deadline, board commitment, etc.)?</span>
+                  <span class="field-error" id="error-goLiveDateJustification" aria-live="polite"></span>
+                </label>
               </div>
             </details>
 
@@ -184,7 +207,7 @@
               <summary>Stakeholders and risk</summary>
               <div class="intake-section-body">
                 <label>
-                  Stakeholders (key groups) <span class="required-indicator" aria-hidden="true">*</span>
+                  <span class="field-label-text">Stakeholders (key groups) <span class="required-indicator" aria-hidden="true">*</span></span>
                   <textarea id="stakeholders" name="stakeholders" rows="3" required data-required-label="Stakeholders"></textarea>
                   <span class="field-error" id="error-stakeholders" aria-live="polite"></span>
                 </label>
@@ -482,6 +505,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=20260224b"></script>
+    <script src="app.js?v=20260224d"></script>
   </body>
 </html>

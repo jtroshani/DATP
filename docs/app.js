@@ -112,6 +112,8 @@ const feedbackEmptyEl = document.getElementById("feedbackEmpty");
 const requiredIntakeFields = intakeForm
   ? Array.from(intakeForm.querySelectorAll("input[required], textarea[required], select[required]"))
   : [];
+const complexityInputs = document.querySelectorAll('input[name="complexity"]');
+const complexityRecommendationEl = document.getElementById("complexityRecommendation");
 
 const sectionEls = {
   sectionA: document.getElementById("sectionA"),
@@ -376,6 +378,7 @@ function init() {
   syncAIControls(true);
   setAnalyticsRange(state.analyticsRange);
   initializeIntakeValidation();
+  updateComplexityGuidance();
   attachEventHandlers();
   setActiveTab("intake");
   trackAnalyticsEvent(ANALYTICS_EVENT_TYPES.formPageLoad);
@@ -440,6 +443,7 @@ function attachEventHandlers() {
       field.dataset.touched = "true";
     }
     validateRequiredIntakeFields();
+    updateComplexityGuidance();
   });
 
   intakeForm.addEventListener("change", (event) => {
@@ -451,7 +455,16 @@ function attachEventHandlers() {
       field.dataset.touched = "true";
     }
     validateRequiredIntakeFields();
+    updateComplexityGuidance();
   });
+
+  if (complexityInputs.length) {
+    complexityInputs.forEach((input) => {
+      input.addEventListener("change", () => {
+        updateComplexityGuidance();
+      });
+    });
+  }
 
   requiredIntakeFields.forEach((field) => {
     field.addEventListener("blur", () => {
@@ -529,6 +542,7 @@ function attachEventHandlers() {
       renderFollowUps(buildFollowUpQuestions(intake));
       resetIntakeValidationState();
       validateRequiredIntakeFields();
+      updateComplexityGuidance();
       ensureRetentionWindowActive();
       generationStatusEl.textContent = `Sample loaded: ${sample.projectTitle}. Click Generate Solution Pack to create a complete example.`;
     });
@@ -758,6 +772,7 @@ function attachEventHandlers() {
       const refreshedIntake = getIntakeData();
       renderFollowUps(buildFollowUpQuestions(refreshedIntake));
       validateRequiredIntakeFields();
+      updateComplexityGuidance();
       if (hasAnySessionData()) ensureRetentionWindowActive();
       if (aiAssistStatusEl) aiAssistStatusEl.textContent = suggestions.summary;
     });
@@ -2323,6 +2338,163 @@ function getSelectedComplexity() {
   return checked ? checked.value : "Standard";
 }
 
+function getComplexityRank(level) {
+  const normalized = normalize(level).toLowerCase();
+  if (normalized === "light") return 1;
+  if (normalized === "enterprise") return 3;
+  return 2;
+}
+
+function countCoordinationItems(value) {
+  return normalize(value)
+    .split(/\n|,|;|\/|\band\b/gi)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .length;
+}
+
+function getComplexityRecommendation(intake = getIntakeData()) {
+  const reasons = [];
+  let score = 0;
+
+  const hasEnteredSignals = Boolean(
+    intake?.projectTitle
+    || intake?.projectGoal
+    || intake?.problem
+    || intake?.goLiveDate
+    || intake?.outcomes?.length
+    || intake?.stakeholders?.length
+    || intake?.systems?.length
+    || intake?.risks?.length
+    || Object.values(intake?.constraints || {}).some(Boolean)
+  );
+
+  if (!hasEnteredSignals) {
+    return {
+      level: "Standard",
+      reasons: ["Default baseline until more intake details are entered"],
+      score: 0,
+    };
+  }
+
+  const stakeholderCount = intake.stakeholders.length;
+  if (stakeholderCount >= 6) {
+    score += 2;
+    reasons.push("many stakeholder groups");
+  } else if (stakeholderCount >= 3) {
+    score += 1;
+    reasons.push("cross-group stakeholder coordination");
+  }
+
+  const systemCount = intake.systems.length;
+  if (systemCount >= 4) {
+    score += 2;
+    reasons.push("several systems/tools impacted");
+  } else if (systemCount >= 2) {
+    score += 1;
+    reasons.push("multiple systems/tools impacted");
+  }
+
+  const riskCount = intake.risks.length;
+  if (riskCount >= 4) {
+    score += 2;
+    reasons.push("multiple delivery risks already identified");
+  } else if (riskCount >= 2) {
+    score += 1;
+    reasons.push("more than one known risk");
+  }
+
+  if (intake.outcomes.length >= 4) {
+    score += 1;
+    reasons.push("many success outcomes to coordinate");
+  }
+
+  const urgency = normalize(intake.urgency);
+  if (urgency === "Critical") {
+    score += 2;
+    reasons.push("critical urgency");
+  } else if (urgency === "High") {
+    score += 1;
+    reasons.push("high urgency");
+  }
+
+  if (intake.goLiveDate) {
+    const daysToGoLive = daysBetween(new Date(), intake.goLiveDate);
+    if (daysToGoLive <= 60) {
+      score += 2;
+      reasons.push("tight go-live timeline");
+    } else if (daysToGoLive <= 120) {
+      score += 1;
+      reasons.push("moderate timeline pressure");
+    }
+  }
+
+  const complianceText = normalize(intake.constraints?.compliance).toLowerCase();
+  if (complianceText) {
+    if (/(ferpa|hipaa|pci|sox|privacy|security|accessibility|audit|legal|regulat|compliance)/.test(complianceText)) {
+      score += 2;
+      reasons.push("compliance or regulatory requirements");
+    } else {
+      score += 1;
+      reasons.push("documented compliance constraints");
+    }
+  }
+
+  const staffingCount = countCoordinationItems(intake.constraints?.staffing);
+  if (staffingCount >= 5) {
+    score += 2;
+    reasons.push("multi-role staffing dependencies");
+  } else if (staffingCount >= 3) {
+    score += 1;
+    reasons.push("cross-role staffing coordination");
+  }
+
+  const techText = normalize(intake.constraints?.tech).toLowerCase();
+  if (techText && /(integrat|migration|legacy|vendor|api|platform|data)/.test(techText)) {
+    score += 1;
+    reasons.push("technical integration constraints");
+  }
+
+  let level = "Light";
+  if (score >= 7) {
+    level = "Enterprise";
+  } else if (score >= 3) {
+    level = "Standard";
+  }
+
+  return {
+    level,
+    reasons: Array.from(new Set(reasons)).slice(0, 3),
+    score,
+  };
+}
+
+function updateComplexityGuidance() {
+  if (!complexityRecommendationEl || !intakeForm) return;
+
+  const selected = getSelectedComplexity();
+  const recommendation = getComplexityRecommendation(getIntakeData());
+  const selectedRank = getComplexityRank(selected);
+  const recommendedRank = getComplexityRank(recommendation.level);
+  const reasonSuffix = recommendation.reasons.length
+    ? ` Signals: ${recommendation.reasons.join(", ")}.`
+    : "";
+
+  let message = `Auto recommendation: ${recommendation.level}.${reasonSuffix}`;
+  if (selectedRank < recommendedRank) {
+    message = `Auto recommendation: ${recommendation.level}. Current selection (${selected}) may understate effort.${reasonSuffix}`;
+  } else if (selectedRank > recommendedRank) {
+    message = `Auto recommendation: ${recommendation.level}. Current selection (${selected}) is more conservative.${reasonSuffix}`;
+  } else if (recommendedRank === getComplexityRank("Standard") && recommendation.score === 0) {
+    message = `Auto recommendation: Standard until more intake details are entered.`;
+  }
+
+  if (complexityRecommendationEl.textContent !== message) {
+    complexityRecommendationEl.textContent = message;
+  }
+  complexityRecommendationEl.classList.toggle("is-warning", selectedRank < recommendedRank);
+}
+
 function getAIConfig() {
   return {
     mode: "local",
@@ -2381,6 +2553,7 @@ function getIntakeData() {
       tech: normalize(formData.get("constraintTech")),
     },
     goLiveDate: normalize(formData.get("goLiveDate")),
+    goLiveDateJustification: normalize(formData.get("goLiveDateJustification")),
     urgency: normalize(formData.get("urgency")) || "Moderate",
     stakeholders: toList(formData.get("stakeholders")),
     systems: toList(formData.get("systems")),
@@ -2509,6 +2682,7 @@ function populateSampleIntakeForm(sampleProject) {
     constraintCompliance: sampleProject.constraints?.compliance || "",
     constraintTech: sampleProject.constraints?.tech || "",
     goLiveDate: sampleGoLive,
+    goLiveDateJustification: sampleProject.goLiveDateJustification || "Target date is needed to align rollout planning, stakeholder readiness, and milestone commitments.",
     urgency: sampleProject.urgency || "Moderate",
     stakeholders: (sampleProject.stakeholders || []).join("\n"),
     systems: (sampleProject.systems || []).join("\n"),
@@ -2523,6 +2697,7 @@ function populateSampleIntakeForm(sampleProject) {
 
   const standardComplexity = document.querySelector('input[name="complexity"][value="Standard"]');
   if (standardComplexity) standardComplexity.checked = true;
+  updateComplexityGuidance();
 
   document.querySelectorAll(".intake-section").forEach((section) => {
     section.open = true;
@@ -2624,6 +2799,9 @@ function buildFollowUpQuestions(intake) {
   }
   if (!intake.goLiveDate) {
     questions.push("When is the latest acceptable go-live date, and is it fixed or flexible?");
+  }
+  if (intake.goLiveDate && !intake.goLiveDateJustification) {
+    questions.push("What business, compliance, academic, or funding commitment is driving the requested go-live date?");
   }
   if (intake.stakeholders.length === 0) {
     questions.push("Which stakeholder groups must approve or adopt this change?");
@@ -2787,7 +2965,8 @@ function buildWorkstreamsData(intake, context = {}) {
 }
 
 function buildContext(intake, complexity, submissionTimestamp) {
-  const textBlob = `${intake.projectGoal} ${intake.problem} ${intake.outcomes.join(" ")} ${intake.constraints.compliance}`.toLowerCase();
+  const goLiveDateJustification = normalize(intake.goLiveDateJustification);
+  const textBlob = `${intake.projectGoal} ${intake.problem} ${intake.outcomes.join(" ")} ${intake.constraints.compliance} ${goLiveDateJustification}`.toLowerCase();
 
   let scenarioType = "Cross-functional";
   if (/policy|regulation|compliance|governance/.test(textBlob)) {
@@ -2836,6 +3015,7 @@ function buildContext(intake, complexity, submissionTimestamp) {
     checkpointPlan,
     recommendationBias: "plan",
     complexityLabel: complexity || "Standard",
+    goLiveDateJustification: goLiveDateJustification || "Go-live date rationale is pending confirmation.",
     ownerLabel: intake.ownerName && intake.ownerArea
       ? `${intake.ownerName} (${intake.ownerArea})`
       : "Sponsor to be confirmed",
@@ -2856,6 +3036,7 @@ function countTbdSignals(intake) {
     ...(intake?.stakeholders || []),
     ...(intake?.systems || []),
     ...(intake?.risks || []),
+    intake?.goLiveDateJustification,
     intake?.constraints?.budget,
     intake?.constraints?.staffing,
     intake?.constraints?.compliance,
@@ -3030,16 +3211,18 @@ function buildFailureDriverReview(intake, context, followups = [], timeline = []
 
   {
     const missingInputs = [];
+    const missingGoLiveJustification = !normalize(intake.goLiveDateJustification);
     if (!intake.goLiveDate) missingInputs.push("Target go-live date");
+    if (missingGoLiveJustification) missingInputs.push("Go-live date justification");
     if (dependencyDetailWeak) missingInputs.push("Dependency detail (systems/risks/dependency constraints)");
     const ownerInfo = resolveFailureDriverOwner(intake, context, roleCoverage, ["pm"], "Project Manager");
-    const level = (aggressiveTarget && (dependencyDetailWeak || !intake.goLiveDate))
+    const level = (aggressiveTarget && (dependencyDetailWeak || !intake.goLiveDate || missingGoLiveJustification))
       ? "High"
-      : (!intake.goLiveDate || dependencyDetailWeak || context.urgencyProfile === "Critical" ? "Medium" : "Low");
+      : (!intake.goLiveDate || missingGoLiveJustification || dependencyDetailWeak || context.urgencyProfile === "Critical" ? "Medium" : "Low");
     const rationale = level === "High"
-      ? "Timeline is aggressive and dependency details are weak/missing, increasing planning failure risk."
+      ? "Timeline is aggressive and key planning support (date rationale and/or dependency details) is weak/missing, increasing planning failure risk."
       : level === "Medium"
-        ? "Some planning inputs are incomplete (target date and/or dependencies), so milestone assumptions need confirmation."
+        ? "Some planning inputs are incomplete (target date rationale and/or dependencies), so milestone assumptions need confirmation."
         : "Target timing and dependency signals support a stable initial planning baseline.";
     addDriver({
       key: "bad_planning",
@@ -3058,7 +3241,7 @@ function buildFailureDriverReview(intake, context, followups = [], timeline = []
       },
       missingInputs,
       minimumNextStep: missingInputs.length
-        ? "Confirm target completion date and name the top 3 dependencies with owners."
+        ? "Confirm target completion date rationale and name the top 3 dependencies with owners."
         : "",
       followUpOwner: missingInputs.length ? "Project Manager" : "",
     });
@@ -3540,6 +3723,7 @@ function buildExecutiveSummary(intake, context, followups) {
     `- Primary outcomes to track: ${outcomes}.`,
     `- Top constraints: ${context.topConstraints.join(" | ")}.`,
     `- Timeline anchor: start on ${context.timelineAnchorLabel}; planned completion by ${context.timelineEndLabel}.`,
+    `- Go-live date rationale: ${context.goLiveDateJustification}.`,
     "- Phase progression: Initiation -> Planning -> Execution -> Monitor -> Closing with named checkpoints and owners.",
     `- Recommended approach: ${approach}`,
     `- Sponsor accountability: ${context.ownerLabel}.`,
@@ -3828,6 +4012,7 @@ function buildAIInsights(intake, context, followups, timeline, workMatrix, aiMet
     intake.outcomes.length > 0,
     intake.stakeholders.length > 0,
     Boolean(intake.goLiveDate),
+    Boolean(intake.goLiveDateJustification),
   ];
   const completeness = Math.round((requiredChecks.filter(Boolean).length / requiredChecks.length) * 100);
 
@@ -4644,6 +4829,7 @@ function getWorkstreamsData(pack) {
     stakeholders: [],
     systems: [],
     risks: [],
+    goLiveDateJustification: "",
     constraints: { time: "", budget: "", staffing: "", compliance: "", tech: "" },
   };
   const context = pack?.context || {};
@@ -6321,6 +6507,7 @@ function getAISectionText(pack) {
     risks: [],
     constraints: { time: "", budget: "", staffing: "", compliance: "", tech: "" },
     goLiveDate: "",
+    goLiveDateJustification: "",
     urgency: pack?.context?.urgencyProfile || "Moderate",
   };
   const fallbackContext = pack?.context || {
@@ -6647,6 +6834,7 @@ function hasAnyIntakeData() {
     intake.outcomes.length ||
     hasConstraint ||
     intake.goLiveDate ||
+    intake.goLiveDateJustification ||
     intake.stakeholders.length ||
     intake.systems.length ||
     intake.risks.length ||
@@ -6754,6 +6942,7 @@ function clearSessionData(statusMessage = "Session data cleared.") {
   resetIntakeValidationState();
   const defaultComplexity = document.querySelector('input[name="complexity"][value="Standard"]');
   if (defaultComplexity) defaultComplexity.checked = true;
+  updateComplexityGuidance();
 
   followupListEl.innerHTML = "";
   followupQuestionsEl.classList.add("hidden");
