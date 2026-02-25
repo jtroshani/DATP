@@ -198,6 +198,12 @@ const FEEDBACK_ENTRIES = [
     receivedAt: "2026-02-25",
     comment: "It seems very handy and efficient for managing projects, and it looks like it could help streamline the process and make the work easier to organize.",
   },
+  {
+    id: "feedback-2026-02-25-bb-1",
+    source: "BB",
+    receivedAt: "2026-02-25",
+    comment: "I tried the tool, and overall it’s very impressive—comprehensive, well-designed, and easy to use.\n\nA few areas could be refined: some role-based outputs felt a little off from what I entered, a few of the initial questions didn’t always feel relevant depending on the project type, and the generated output was a bit longer than needed in places.\n\nThat said, this is a very strong tool with a great UI and a lot of potential. With a few refinements and continued use, it can become an even more powerful framework builder for projects.",
+  },
 ];
 
 const SAMPLE_PROJECTS = [
