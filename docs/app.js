@@ -186,6 +186,18 @@ const FEEDBACK_ENTRIES = [
     receivedAt: "2026-02-24",
     comment: "This web tool looks promising. Could you also add downloadable templates for Teams, Workstreams, and a Kickoff Presentation?",
   },
+  {
+    id: "feedback-2026-02-25-mj-1",
+    source: "MJ",
+    receivedAt: "2026-02-25",
+    comment: "Nice Work, I sigest adding clear guidance (or auto-calculation) for the Complexity (Light/Standard/Enterprise) selection, fix the required-field indicator wrapping that disrupts form spacing, and consider dropdowns for Sponsor and Business Area to keep entries consistent. Also, add a prompt for go-live date justification and make \"AI Suggest Missing Intake Fields\" a required step before enabling \"Generate Solution Pack,\" since it currently shows a confirmation message but no visible updates.",
+  },
+  {
+    id: "feedback-2026-02-25-bj-1",
+    source: "BJ",
+    receivedAt: "2026-02-25",
+    comment: "It seems very handy and efficient for managing projects, and it looks like it could help streamline the process and make the work easier to organize.",
+  },
 ];
 
 const SAMPLE_PROJECTS = [
