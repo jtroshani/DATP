@@ -2906,62 +2906,63 @@ function buildWorkstreamsData(intake, context = {}) {
   const hasDataReporting = /data|report|dashboard|analytics|metrics?/i.test(
     `${problemText} ${goalText} ${outcomes.join(" ")} ${systems.join(" ")}`
   );
+  const roleGuidance = buildIntakeRoleGuidance(intake, context);
 
-  const addWorkstream = (name, focus, suggestedRole) => {
+  const addWorkstream = (name, focus, ownerRoleCandidates = []) => {
     streams.push({
       name,
       focus,
-      pendingOwner: `To be assigned (${suggestedRole})`,
+      pendingOwner: formatPendingOwnerFromGuidance(roleGuidance, ownerRoleCandidates),
     });
   };
 
   addWorkstream(
     "Governance and Decisioning",
     `Set decision rights, escalation path, and governance cadence for this ${scenario} initiative.`,
-    "Sponsor / PM"
+    ["Project Sponsor", "Project Manager"]
   );
 
   addWorkstream(
     "Requirements and Process Design",
     `Define requirements, workflow handoffs, and acceptance criteria needed to deliver ${primaryOutcome}.`,
-    "Product Owner / Business Analyst"
+    ["Product Owner", "Business Analyst"]
   );
 
   addWorkstream(
     "Delivery and Implementation",
     `Coordinate build/configuration, testing, and deployment activities across ${techFocus}.`,
-    "Tech Lead / Delivery Lead"
+    ["Technical Lead", "Delivery Team"]
   );
 
   addWorkstream(
     "Communications",
     `Prepare and deliver clear project communications for ${keyStakeholders}, including updates, decisions, and rollout notices.`,
-    "Communications Lead"
+    ["Communications Lead"]
   );
 
   addWorkstream(
     "Training",
     "Design and execute role-based training, enablement materials, and readiness support before go-live.",
-    "Training Lead"
+    ["Training Lead"]
   );
 
   addWorkstream(
     "Data Integration",
     `Coordinate data mapping, integration dependencies, and validation checkpoints across ${techFocus}.`,
-    "Data Integration Lead"
+    ["Data/Integration Lead", "Technical Lead"]
   );
 
   addWorkstream(
     "Risk and Dependency Management",
     `Track, escalate, and mitigate risks and dependencies, including ${riskFocus}.`,
-    "Project Manager"
+    ["Project Manager"]
   );
 
   if (hasCompliance) {
     addWorkstream(
       "Compliance and Controls",
       `Validate controls and approvals against ${complianceFocus} before go-live decisions.`,
-      "Compliance / Security Lead"
+      ["Security/Compliance Lead", "SMEs"]
     );
   }
 
@@ -2969,7 +2970,7 @@ function buildWorkstreamsData(intake, context = {}) {
     addWorkstream(
       "Data and Reporting",
       "Define core metrics, reporting cadence, and data-quality checkpoints for leadership visibility.",
-      "Data / Reporting Lead"
+      ["Data/Integration Lead", "Business Analyst"]
     );
   }
 
@@ -3079,37 +3080,68 @@ function hasStaffingRole(roleCoverage, roleKey) {
   return Boolean(roleCoverage[roleKey]);
 }
 
-function resolveFailureDriverOwner(intake, context, roleCoverage, candidates = [], fallbackRole = "Project Manager") {
+function resolveFailureDriverOwner(intake, context, roleCoverage, roleGuidance, candidates = [], fallbackRole = "Project Manager") {
   const sponsorAvailable = Boolean(normalize(intake?.ownerName));
   const sponsorLabel = sponsorAvailable
     ? `Project Sponsor (${context?.ownerLabel || intake.ownerName})`
     : "Project Sponsor";
+  const candidateRoleMap = {
+    pm: ["Project Manager"],
+    ba: ["Business Analyst", "Product Owner"],
+    tech: ["Technical Lead", "Delivery Team", "Data/Integration Lead"],
+    sme: ["SMEs", "Security/Compliance Lead"],
+    training: ["Training Lead", "Communications Lead"],
+  };
 
   for (const candidate of candidates) {
-    if (candidate === "sponsor" && sponsorAvailable) {
-      return {
-        owner: sponsorLabel,
-        ownerNeedsConfirmation: false,
-      };
+    if (candidate === "sponsor") {
+      if (sponsorAvailable) {
+        return {
+          owner: sponsorLabel,
+          ownerNeedsConfirmation: false,
+        };
+      }
+      const sponsorRoleFromIntake = resolveRoleLabelFromGuidance(roleGuidance, "Project Sponsor", { allowSuggested: false });
+      if (sponsorRoleFromIntake) {
+        return {
+          owner: sponsorRoleFromIntake,
+          ownerNeedsConfirmation: false,
+        };
+      }
     }
-    if (candidate === "pm" && hasStaffingRole(roleCoverage, "pm")) {
-      return { owner: "Project Manager", ownerNeedsConfirmation: false };
-    }
-    if (candidate === "ba" && hasStaffingRole(roleCoverage, "ba")) {
-      return { owner: "Business Analyst / Product Owner", ownerNeedsConfirmation: false };
-    }
-    if (candidate === "tech" && hasStaffingRole(roleCoverage, "tech")) {
-      return { owner: "Tech Lead", ownerNeedsConfirmation: false };
-    }
-    if (candidate === "sme" && hasStaffingRole(roleCoverage, "sme")) {
-      return { owner: "SME Lead", ownerNeedsConfirmation: false };
-    }
-    if (candidate === "training" && hasStaffingRole(roleCoverage, "training")) {
-      return { owner: "Training / Change Lead", ownerNeedsConfirmation: false };
+    if (candidate !== "sponsor" && hasStaffingRole(roleCoverage, candidate)) {
+      const mappedRoles = candidateRoleMap[candidate] || [];
+      const exactRoleLabel = mappedRoles
+        .map((canonicalRole) => resolveRoleLabelFromGuidance(roleGuidance, canonicalRole, { allowSuggested: false }))
+        .find(Boolean);
+      if (exactRoleLabel) {
+        return { owner: exactRoleLabel, ownerNeedsConfirmation: false };
+      }
+      if (candidate === "pm") return { owner: "Project Manager", ownerNeedsConfirmation: false };
+      if (candidate === "ba") return { owner: "Business Analyst / Product Owner", ownerNeedsConfirmation: false };
+      if (candidate === "tech") return { owner: "Tech Lead", ownerNeedsConfirmation: false };
+      if (candidate === "sme") return { owner: "SME Lead", ownerNeedsConfirmation: false };
+      if (candidate === "training") return { owner: "Training / Change Lead", ownerNeedsConfirmation: false };
     }
   }
 
-  const fallback = fallbackRole === "Project Sponsor" ? "Project Sponsor" : "Project Manager";
+  const fallbackCanonical = fallbackRole === "Project Sponsor" ? "Project Sponsor" : "Project Manager";
+  const fallbackExact = resolveRoleLabelFromGuidance(roleGuidance, fallbackCanonical, { allowSuggested: false });
+  if (fallbackExact) {
+    return {
+      owner: fallbackExact,
+      ownerNeedsConfirmation: false,
+    };
+  }
+  const fallbackSuggested = resolveRoleLabelFromGuidance(roleGuidance, fallbackCanonical, { allowSuggested: true, fallback: "" });
+  if (fallbackSuggested) {
+    return {
+      owner: `${fallbackSuggested} (confirm)`,
+      ownerNeedsConfirmation: true,
+    };
+  }
+
+  const fallback = fallbackCanonical;
   return {
     owner: `${fallback} (Owner not provided in intake—confirm)`,
     ownerNeedsConfirmation: true,
@@ -3149,6 +3181,7 @@ function finalizeFailureDriverEvaluation(rawEval) {
 
 function buildFailureDriverReview(intake, context, followups = [], timeline = [], workMatrix = []) {
   const roleCoverage = parseStaffingRoleCoverage(intake?.constraints?.staffing || "");
+  const roleGuidance = buildIntakeRoleGuidance(intake, context);
   const tbdSignals = countTbdSignals(intake);
   const goalMeasured = hasMeasurableLanguage(intake.projectGoal) || intake.outcomes.some((outcome) => hasMeasurableLanguage(outcome));
   const outcomesCount = intake.outcomes.length;
@@ -3189,7 +3222,7 @@ function buildFailureDriverReview(intake, context, followups = [], timeline = []
     if (!intake.projectGoal) missingInputs.push("One-sentence goal");
     if (!outcomesCount) missingInputs.push("Desired outcomes");
     if (!stakeholdersCount) missingInputs.push("Stakeholders");
-    const ownerInfo = resolveFailureDriverOwner(intake, context, roleCoverage, ["sponsor", "pm"], "Project Sponsor");
+    const ownerInfo = resolveFailureDriverOwner(intake, context, roleCoverage, roleGuidance, ["sponsor", "pm"], "Project Sponsor");
     const level = (!intake.projectGoal || stakeholdersCount === 0 || outcomesCount === 0)
       ? "High"
       : (stakeholdersCount < 2 || outcomesCount < 2 || !sponsorAreaNamed ? "Medium" : "Low");
@@ -3227,7 +3260,7 @@ function buildFailureDriverReview(intake, context, followups = [], timeline = []
     if (!intake.goLiveDate) missingInputs.push("Target go-live date");
     if (missingGoLiveJustification) missingInputs.push("Go-live date justification");
     if (dependencyDetailWeak) missingInputs.push("Dependency detail (systems/risks/dependency constraints)");
-    const ownerInfo = resolveFailureDriverOwner(intake, context, roleCoverage, ["pm"], "Project Manager");
+    const ownerInfo = resolveFailureDriverOwner(intake, context, roleCoverage, roleGuidance, ["pm"], "Project Manager");
     const level = (aggressiveTarget && (dependencyDetailWeak || !intake.goLiveDate || missingGoLiveJustification))
       ? "High"
       : (!intake.goLiveDate || missingGoLiveJustification || dependencyDetailWeak || context.urgencyProfile === "Critical" ? "Medium" : "Low");
@@ -3263,7 +3296,7 @@ function buildFailureDriverReview(intake, context, followups = [], timeline = []
     const missingInputs = [];
     if (!sponsorNamed) missingInputs.push("Business owner / sponsor (name)");
     if (!sponsorAreaNamed) missingInputs.push("Business area");
-    const ownerInfo = resolveFailureDriverOwner(intake, context, roleCoverage, ["sponsor"], "Project Sponsor");
+    const ownerInfo = resolveFailureDriverOwner(intake, context, roleCoverage, roleGuidance, ["sponsor"], "Project Sponsor");
     const level = !sponsorNamed ? "High" : (!sponsorAreaNamed ? "Medium" : "Low");
     const rationale = level === "High"
       ? "No sponsor/decision authority is named in intake, which creates escalation and approval risk."
@@ -3297,7 +3330,7 @@ function buildFailureDriverReview(intake, context, followups = [], timeline = []
     if (!intake.problem) missingInputs.push("Problem / opportunity details");
     if (!outcomesCount) missingInputs.push("Desired outcomes");
     if (tbdSignals > 0) missingInputs.push("TBD/undecided placeholders in intake");
-    const ownerInfo = resolveFailureDriverOwner(intake, context, roleCoverage, ["ba", "sme", "pm"], "Project Manager");
+    const ownerInfo = resolveFailureDriverOwner(intake, context, roleCoverage, roleGuidance, ["ba", "sme", "pm"], "Project Manager");
     const vagueRequirements = problemLen < 90 || outcomesCount < 2 || tbdSignals >= 2;
     const level = (!intake.problem || outcomesCount === 0 || tbdSignals >= 3)
       ? "High"
@@ -3334,7 +3367,7 @@ function buildFailureDriverReview(intake, context, followups = [], timeline = []
     const missingInputs = [];
     if (!intake.projectGoal) missingInputs.push("One-sentence goal");
     if (!goalMeasured) missingInputs.push("Measurable success criteria / definition of done");
-    const ownerInfo = resolveFailureDriverOwner(intake, context, roleCoverage, ["sponsor", "ba", "pm"], "Project Manager");
+    const ownerInfo = resolveFailureDriverOwner(intake, context, roleCoverage, roleGuidance, ["sponsor", "ba", "pm"], "Project Manager");
     const level = (!intake.projectGoal || outcomesCount === 0)
       ? "High"
       : (!goalMeasured || outcomesCount < 2 ? "Medium" : "Low");
@@ -3368,7 +3401,7 @@ function buildFailureDriverReview(intake, context, followups = [], timeline = []
 
   {
     const missingInputs = ["Explicit in-scope / out-of-scope boundaries in intake"];
-    const ownerInfo = resolveFailureDriverOwner(intake, context, roleCoverage, ["pm", "sponsor"], "Project Manager");
+    const ownerInfo = resolveFailureDriverOwner(intake, context, roleCoverage, roleGuidance, ["pm", "sponsor"], "Project Manager");
     const broadOutcomeSet = outcomesCount >= 4 || normalize(intake.problem).length > 220;
     const level = broadOutcomeSet && (tbdSignals > 0 || !sponsorNamed)
       ? "High"
@@ -3402,7 +3435,7 @@ function buildFailureDriverReview(intake, context, followups = [], timeline = []
   {
     const missingInputs = [];
     if (!normalize(intake.constraints.staffing)) missingInputs.push("Staffing roles/capacity");
-    const ownerInfo = resolveFailureDriverOwner(intake, context, roleCoverage, ["pm", "sponsor"], "Project Manager");
+    const ownerInfo = resolveFailureDriverOwner(intake, context, roleCoverage, roleGuidance, ["pm", "sponsor"], "Project Manager");
     const limitedCapacity = roleCoverage.limited;
     const lowCoverageForComplexity = highComplexity ? roleCount < 4 : standardOrHigher ? roleCount < 3 : roleCount < 2;
     const level = (!roleCoverage.hasStaffing && standardOrHigher) || (limitedCapacity && (context.urgencyProfile === "High" || context.urgencyProfile === "Critical"))
@@ -3440,7 +3473,7 @@ function buildFailureDriverReview(intake, context, followups = [], timeline = []
   {
     const missingInputs = [];
     if (!normalize(intake.constraints.tech) && systemsCount === 0) missingInputs.push("Technology/tool constraints or impacted systems");
-    const ownerInfo = resolveFailureDriverOwner(intake, context, roleCoverage, ["tech", "sme", "pm"], "Project Manager");
+    const ownerInfo = resolveFailureDriverOwner(intake, context, roleCoverage, roleGuidance, ["tech", "sme", "pm"], "Project Manager");
     const constraintMismatch = technologyScenario && techMissing;
     const level = techUndecided || constraintMismatch
       ? "High"
@@ -3479,7 +3512,7 @@ function buildFailureDriverReview(intake, context, followups = [], timeline = []
     if ((technologyScenario || policyScenario) && !systemsCount && !normalize(intake.constraints.tech)) {
       missingInputs.push("Tooling/domain context for SME support planning");
     }
-    const ownerInfo = resolveFailureDriverOwner(intake, context, roleCoverage, ["pm", "sme", "training"], "Project Manager");
+    const ownerInfo = resolveFailureDriverOwner(intake, context, roleCoverage, roleGuidance, ["pm", "sme", "training"], "Project Manager");
     const likelyInexperience = roleCoverage.inexperienceSignal;
     const thinCoverage = roleCount < (highComplexity ? 4 : 3);
     const level = likelyInexperience
@@ -3658,6 +3691,7 @@ function buildWorkMatrix(intake, context, timeline) {
   const outcomes = intake.outcomes.length
     ? intake.outcomes
     : ["Define measurable success outcomes and acceptance criteria"];
+  const roleGuidance = buildIntakeRoleGuidance(intake, context);
 
   const dueFor = (index) => timeline[index]?.targetDate || timeline[timeline.length - 1]?.targetDate || "TBD";
   const itemStatus = context.urgencyProfile === "Critical"
@@ -3665,46 +3699,47 @@ function buildWorkMatrix(intake, context, timeline) {
     : context.urgencyProfile === "High"
       ? ["In Progress", "Not Started", "Not Started", "Not Started", "Not Started", "Not Started"]
       : ["Not Started", "Not Started", "Not Started", "Not Started", "Not Started", "Not Started"];
+  const owner = (canonicalRoles, joiner = " + ") => composeRoleLabelsFromGuidance(roleGuidance, canonicalRoles, { joiner, allowSuggested: true });
 
   return [
     {
       workItem: "Charter and scope signoff",
-      owner: "Sponsor + PM",
+      owner: owner(["Project Sponsor", "Project Manager"]),
       status: itemStatus[0],
       dueDate: dueFor(0),
       dependencies: "Project title, goal, and owner confirmed",
     },
     {
       workItem: `Requirements baseline for ${outcomes[0].toLowerCase()}`,
-      owner: "Product Owner + SMEs",
+      owner: owner(["Product Owner", "Business Analyst", "SMEs"]),
       status: itemStatus[1],
       dueDate: dueFor(1),
       dependencies: "Charter and scope signoff",
     },
     {
       workItem: "Solution design and governance approval",
-      owner: "PM + Tech Lead",
+      owner: owner(["Project Manager", "Technical Lead"]),
       status: itemStatus[2],
       dueDate: dueFor(2),
       dependencies: "Requirements baseline complete",
     },
     {
       workItem: "Build/configuration and integration testing",
-      owner: "Tech Lead + Delivery Team",
+      owner: owner(["Technical Lead", "Delivery Team"]),
       status: itemStatus[3],
       dueDate: dueFor(3),
       dependencies: "Design approval and environment readiness",
     },
     {
       workItem: "Readiness, training, and communications",
-      owner: "Change/Training Lead",
+      owner: owner(["Training Lead", "Communications Lead"], " / "),
       status: itemStatus[4],
       dueDate: dueFor(4),
       dependencies: "Testing evidence and stakeholder signoff",
     },
     {
       workItem: "Go-live, hypercare, and handoff",
-      owner: "PM + Operations Lead",
+      owner: owner(["Project Manager", "Operations Lead"]),
       status: itemStatus[5],
       dueDate: dueFor(4),
       dependencies: "Readiness checklist signed and launch decision",
@@ -3745,6 +3780,26 @@ function buildExecutiveSummary(intake, context, followups) {
 }
 
 function buildGovernanceModel(intake, context) {
+  const roleGuidance = buildIntakeRoleGuidance(intake, context);
+  const providedRoleLines = roleGuidance.providedRolesExact.length
+    ? roleGuidance.providedRolesExact.map((role) => `- ${role}`)
+    : ["- No staffing roles were entered in the intake."];
+  const suggestedRoleLines = roleGuidance.suggestedRoles.length
+    ? roleGuidance.suggestedRoles.map((item) => `- ${item.role} (Suggested based on intake: ${item.reason})`)
+    : ["- No additional role suggestions based on current intake signals."];
+  const sponsorRole = resolveRoleLabelFromGuidance(roleGuidance, "Project Sponsor", { allowSuggested: true, fallback: "Sponsor (confirm)" });
+  const businessOwnerRole = resolveRoleLabelFromGuidance(roleGuidance, "Business Owner", { allowSuggested: true, fallback: "Business Owner (confirm)" });
+  const productOwnerRole = resolveRoleLabelFromGuidance(roleGuidance, "Product Owner", { allowSuggested: true })
+    || resolveRoleLabelFromGuidance(roleGuidance, "Business Analyst", { allowSuggested: true, fallback: "Product/Business Lead (confirm)" });
+  const pmRole = resolveRoleLabelFromGuidance(roleGuidance, "Project Manager", { allowSuggested: true, fallback: "PM (confirm)" });
+  const techRole = resolveRoleLabelFromGuidance(roleGuidance, "Technical Lead", { allowSuggested: true, fallback: "Technical Lead (confirm)" });
+  const opsRole = resolveRoleLabelFromGuidance(roleGuidance, "Operations Lead", { allowSuggested: true, fallback: "Operations Lead (confirm)" });
+  const dataRole = resolveRoleLabelFromGuidance(roleGuidance, "Data/Integration Lead", { allowSuggested: true, fallback: "Data/Reporting Lead (confirm)" });
+  const smeRole = resolveRoleLabelFromGuidance(roleGuidance, "SMEs", { allowSuggested: true, fallback: "SMEs (confirm)" });
+  const securityRole = resolveRoleLabelFromGuidance(roleGuidance, "Security/Compliance Lead", { allowSuggested: true, fallback: "Security/Compliance Lead (confirm)" });
+  const commsRole = resolveRoleLabelFromGuidance(roleGuidance, "Communications Lead", { allowSuggested: true, fallback: "Communications Lead (confirm)" });
+  const trainingRole = resolveRoleLabelFromGuidance(roleGuidance, "Training Lead", { allowSuggested: true, fallback: "Training Lead (confirm)" });
+
   const cadence = context.governanceMode === "Lightweight governance"
     ? [
         "Working Group: weekly 45-minute delivery sync",
@@ -3767,23 +3822,29 @@ function buildGovernanceModel(intake, context) {
     : "Required artifacts: scope one-pager, action log, RAID log, decision log, weekly status summary.";
 
   const text = [
-    "Recommended governance structure:",
-    "- Steering Committee: Sponsor, product/business owner, PM, Tech Lead, and key domain leads.",
-    "- Working Group: PM, delivery leads, operations owner, analytics/reporting lead.",
-    "- SME Ring: security, accessibility, legal/compliance, procurement, communications, training.",
+    "Role alignment from intake (exact labels provided):",
+    ...providedRoleLines,
     "",
-    "RACI-style accountability:",
+    "Missing-role suggestions to confirm (based on intake signals):",
+    ...suggestedRoleLines,
+    "",
+    "Recommended governance structure:",
+    `- Steering Committee: ${sponsorRole}, ${businessOwnerRole}, ${pmRole}, ${techRole}, and key domain leads as needed.`,
+    `- Working Group: ${pmRole}, delivery leads, ${opsRole}, ${dataRole}.`,
+    `- SME Ring: ${securityRole}, accessibility/legal/compliance advisors, procurement (if applicable), ${commsRole}, ${trainingRole}, ${smeRole}.`,
+    "",
+    "RACI-style accountability (starter baseline using intake-aligned roles):",
     "Role | Accountability",
-    "Sponsor | A - Approves scope, funding, and unresolved tradeoffs",
-    "Product Owner | A/R - Prioritizes requirements and accepts deliverables",
-    "Project Manager | R - Orchestrates plan, risks, dependencies, reporting",
-    "Tech Lead | R - Designs technical approach, integration, and release controls",
-    "SMEs | C/R - Provide controls, standards, and signoff inputs",
+    `${sponsorRole} | A - Approves scope, funding, and unresolved tradeoffs`,
+    `${productOwnerRole} | A/R - Prioritizes requirements and accepts deliverables`,
+    `${pmRole} | R - Orchestrates plan, risks, dependencies, reporting`,
+    `${techRole} | R - Designs technical approach, integration, and release controls`,
+    `${smeRole} | C/R - Provide controls, standards, and signoff inputs`,
     "",
     "Decision rights and escalation path:",
     "- Working Group can decide day-to-day sequencing and delivery adjustments within approved scope.",
     "- Steering Committee decides scope changes, budget shifts, timeline resets, and policy exceptions.",
-    "- Escalation path: Workstream Lead -> PM -> Sponsor -> Steering Committee within 48 hours for critical blockers.",
+    `- Escalation path: Workstream Lead -> ${pmRole} -> ${sponsorRole} -> Steering Committee within 48 hours for critical blockers.`,
     "",
     "Meeting cadence:",
     ...cadence.map((line) => `- ${line}`),
@@ -3793,6 +3854,20 @@ function buildGovernanceModel(intake, context) {
 }
 
 function buildProcessModel(intake, context) {
+  const roleGuidance = buildIntakeRoleGuidance(intake, context);
+  const sponsorRole = resolveRoleLabelFromGuidance(roleGuidance, "Project Sponsor", { allowSuggested: true, fallback: "Sponsor (confirm)" });
+  const pmRole = resolveRoleLabelFromGuidance(roleGuidance, "Project Manager", { allowSuggested: true, fallback: "PM (confirm)" });
+  const businessOwnerRole = resolveRoleLabelFromGuidance(roleGuidance, "Business Owner", { allowSuggested: true, fallback: "business owner (confirm)" });
+  const assessmentReviewRoles = composeRoleLabelsFromGuidance(
+    roleGuidance,
+    ["Security/Compliance Lead", "Data/Integration Lead", "SMEs"],
+    { joiner: " + ", allowSuggested: true, fallback: "SME reviewers (confirm)" }
+  );
+  const leanApprovalChain = composeRoleLabelsFromGuidance(
+    roleGuidance,
+    ["Project Sponsor", "Project Manager", "SMEs"],
+    { joiner: " + ", allowSuggested: true, fallback: "Sponsor + PM + one SME reviewer" }
+  );
   const mvpProcess = context.governanceMode === "Lightweight governance"
     ? "MVP process: one intake template, one 60-minute triage, one owner-assigned action list, one weekly checkpoint."
     : "MVP process: one intake template, triage workshop, prioritized backlog, weekly checkpoint with decision log.";
@@ -3802,20 +3877,21 @@ function buildProcessModel(intake, context) {
     "Intake -> Initiation -> Planning -> Execution -> Monitor -> Closing",
     "",
     "Workflow mapping suggestions:",
-    "- Intake handoff: Sponsor submits scope intent; PM validates clarity and dependencies within 2 business days.",
-    "- Assessment approval: SMEs confirm constraints (security, compliance, data, procurement) before planning baseline.",
+    `- Intake handoff: ${sponsorRole} submits scope intent; ${pmRole} validates clarity and dependencies within 2 business days.`,
+    `- Assessment approval: ${assessmentReviewRoles} confirm applicable constraints before planning baseline.`,
     "- Plan approval: Steering confirms timeline, resources, and measurable outcomes.",
     "- Execution controls: Use action log and decision log to track ownership and unresolved blockers.",
-    "- Validation gate: UAT/readiness checklist signed by business owner and delivery leads before launch.",
+    `- Validation gate: UAT/readiness checklist signed by ${businessOwnerRole} and delivery leads before launch.`,
     "- SLA guidance: Intake triage <= 2 business days, dependency resolution <= 5 business days, escalation response <= 48 hours.",
     "",
     "Minimum viable process option for small projects:",
     `- ${mvpProcess}`,
-    "- Keep approval chain to Sponsor + PM + one SME reviewer; avoid unnecessary review layers.",
+    `- Keep approval chain to ${leanApprovalChain}; avoid unnecessary review layers.`,
   ].join("\n");
 }
 
 function buildPlanningDeliverables(intake, context) {
+  const roleGuidance = buildIntakeRoleGuidance(intake, context);
   const outcomes = intake.outcomes.length ? intake.outcomes : ["Define measurable outcomes with sponsor"];
   const inScope = outcomes.slice(0, 3).map((item) => `- ${item}`).join("\n");
 
@@ -3833,15 +3909,12 @@ function buildPlanningDeliverables(intake, context) {
     "- Operational handoff ownership for post-launch support",
   ].join("\n");
 
-  const resourcePlan = [
-    "- Sponsor (decision authority)",
-    "- Product Owner / Business Lead",
-    "- Project Manager",
-    "- Tech Lead / Systems Analyst",
-    "- Operations Lead",
-    "- Data/Reporting Analyst",
-    "- Change, Communications, and Training Lead",
-  ].join("\n");
+  const resourcePlan = roleGuidance.providedRolesExact.length
+    ? roleGuidance.providedRolesExact.map((role) => `- ${role}`).join("\n")
+    : "- No staffing roles were entered in the intake.";
+  const suggestedRolesPlan = roleGuidance.suggestedRoles.length
+    ? roleGuidance.suggestedRoles.map((item) => `- ${item.role} (Suggested based on intake: ${item.reason})`).join("\n")
+    : "- No additional role suggestions based on current intake signals.";
 
   const topRiskInputs = intake.risks.length ? intake.risks.slice(0, 2) : ["Scope creep", "Resource contention"];
 
@@ -3876,8 +3949,11 @@ function buildPlanningDeliverables(intake, context) {
     "Dependency map:",
     dependencyMap,
     "",
-    "Resource plan (roles needed):",
+    "Resource plan (roles provided in intake - preserved exactly):",
     resourcePlan,
+    "",
+    "Suggested additional roles to confirm (based on intake signals):",
+    suggestedRolesPlan,
     "",
     "Stakeholder responsibilities (kickoff baseline):",
     stakeholderResponsibilities,
@@ -3892,11 +3968,18 @@ function buildPlanningDeliverables(intake, context) {
 }
 
 function buildExecutionModel(intake, context) {
+  const roleGuidance = buildIntakeRoleGuidance(intake, context);
   const reportingFocus = context.recommendationBias || "plan";
   const operationalCheckpoints = (context.checkpointPlan || [])
     .slice(0, 4)
     .map((checkpoint) => `- ${checkpoint}`)
     .join("\n");
+  const sponsorRole = resolveRoleLabelFromGuidance(roleGuidance, "Project Sponsor", { allowSuggested: true, fallback: "Sponsor (confirm)" });
+  const productRole = resolveRoleLabelFromGuidance(roleGuidance, "Product Owner", { allowSuggested: true })
+    || resolveRoleLabelFromGuidance(roleGuidance, "Business Analyst", { allowSuggested: true, fallback: "Product/Business Lead (confirm)" });
+  const pmRole = resolveRoleLabelFromGuidance(roleGuidance, "Project Manager", { allowSuggested: true, fallback: "PM (confirm)" });
+  const techOpsRoles = composeRoleLabelsFromGuidance(roleGuidance, ["Technical Lead", "Operations Lead"], { joiner: " / ", allowSuggested: true, fallback: "Technical/Operations leads (confirm)" });
+  const smeRole = resolveRoleLabelFromGuidance(roleGuidance, "SMEs", { allowSuggested: true, fallback: "SMEs (confirm)" });
   const text = [
     "Recommended operating rhythm:",
     "- Weekly status review: progress, milestones, blockers, risks, and decisions.",
@@ -3905,11 +3988,11 @@ function buildExecutionModel(intake, context) {
     "- Monitor checkpoint review: verify phase exit criteria before moving forward.",
     "",
     "Ownership model for deliverables:",
-    "- Sponsor owns strategic decisions and benefit realization.",
-    "- Product Owner owns requirement quality and acceptance criteria.",
-    "- PM owns timeline, dependencies, RAID management, and reporting cadence.",
-    "- Tech/Operations leads own solution build, testing, and readiness outputs.",
-    "- SMEs own policy/compliance/accessibility controls at each checkpoint.",
+    `- ${sponsorRole} owns strategic decisions and benefit realization.`,
+    `- ${productRole} owns requirement quality and acceptance criteria.`,
+    `- ${pmRole} owns timeline, dependencies, RAID management, and reporting cadence.`,
+    `- ${techOpsRoles} own solution build, testing, and readiness outputs.`,
+    `- ${smeRole} own policy/compliance/accessibility controls at each checkpoint.`,
     "",
     "Operational checkpoints:",
     operationalCheckpoints,
@@ -3928,19 +4011,32 @@ function buildExecutionModel(intake, context) {
 }
 
 function buildExpertCollaboration(intake, context) {
+  const roleGuidance = buildIntakeRoleGuidance(intake, context);
   const systemsSummary = intake.systems.length
     ? intake.systems.join(", ")
     : "Systems to be confirmed during assessment";
+  const hasRoleInContext = (canonicalRole) => Boolean(roleGuidance.canonicalToProvided?.[canonicalRole]) || hasSuggestedCanonicalRole(roleGuidance, canonicalRole);
+  const expertLines = [];
+  const addExpertLine = (canonicalRole, text) => {
+    if (!hasRoleInContext(canonicalRole)) return;
+    const roleLabel = resolveRoleLabelFromGuidance(roleGuidance, canonicalRole, { allowSuggested: true, fallback: canonicalRole });
+    expertLines.push(`- ${roleLabel}: ${text}`);
+  };
+
+  addExpertLine("Security/Compliance Lead", "engage during assessment to define controls and signoff criteria.");
+  addExpertLine("Data/Integration Lead", "engage during planning for data definitions, reporting metrics, and quality checks.");
+  addExpertLine("Vendor", "engage during planning if vendors/tools/contracts are impacted.");
+  addExpertLine("Communications Lead", "engage before execution to align messaging and adoption timeline.");
+  addExpertLine("Training Lead", "engage during execution to prepare role-based enablement before go-live.");
+  addExpertLine("Operations Lead", "engage before launch to confirm support model, handoff, and hypercare readiness.");
+  addExpertLine("SMEs", "engage at requirements, validation, and readiness checkpoints for domain signoff input.");
+  if (!expertLines.length) {
+    expertLines.push("- Confirm which intake-listed roles should participate as SMEs/advisors during assessment, planning, and go-live readiness.");
+  }
 
   return [
     "SME involvement recommendations:",
-    "- Security: engage during assessment to define controls and signoff criteria.",
-    "- Data/Analytics: engage during planning for data definitions, reporting metrics, and quality checks.",
-    "- Procurement: engage during planning if vendors/tools/contracts are impacted.",
-    "- Accessibility: engage at requirements stage and validate before launch.",
-    "- Legal/Compliance: engage at assessment and any scope change with policy impact.",
-    "- Communications: engage before execution to align messaging and adoption timeline.",
-    "- Training: engage during execution to prepare role-based enablement before go-live.",
+    ...expertLines,
     `- Impacted systems/tools context: ${systemsSummary}.`,
     "",
     "Workshop structure to move fast:",
@@ -3955,10 +4051,16 @@ function buildExpertCollaboration(intake, context) {
 function buildNextSteps(intake, context) {
   const startDate = new Date();
   const weekLabel = `week of ${formatDate(startDate)}`;
+  const roleGuidance = buildIntakeRoleGuidance(intake, context);
+  const accountabilityRoles = composeRoleLabelsFromGuidance(
+    roleGuidance,
+    ["Project Sponsor", "Product Owner", "Business Analyst", "Project Manager"],
+    { joiner: ", ", allowSuggested: true, fallback: "sponsor, product/business lead, and project manager" }
+  );
 
   const text = [
     `Do this next week checklist (${weekLabel}):`,
-    "1. Confirm sponsor, product owner, and PM accountability in writing.",
+    `1. Confirm ${accountabilityRoles} accountability in writing.`,
     "2. Finalize scope statement with in-scope and out-of-scope boundaries.",
     "3. Run a 90-minute discovery session to align on outcomes and constraints.",
     "4. Build the initial milestone plan and dependency tracker.",
@@ -3977,17 +4079,18 @@ function buildCheckpointPlan(milestones, intake) {
   const stakeholderGroups = intake.stakeholders.length
     ? intake.stakeholders.slice(0, 3).join(", ")
     : "key stakeholder groups";
+  const roleGuidance = buildIntakeRoleGuidance(intake);
 
   return normalized.map((milestone, index) => {
     const owner = index === 0
-      ? "Sponsor + PM"
+      ? composeRoleLabelsFromGuidance(roleGuidance, ["Project Sponsor", "Project Manager"], { joiner: " + ", allowSuggested: true })
       : index === 1
-        ? "Product Owner + SMEs"
+        ? composeRoleLabelsFromGuidance(roleGuidance, ["Product Owner", "Business Analyst", "SMEs"], { joiner: " + ", allowSuggested: true })
         : index === 2
-          ? "Tech Lead + PM"
+          ? composeRoleLabelsFromGuidance(roleGuidance, ["Technical Lead", "Project Manager"], { joiner: " + ", allowSuggested: true })
           : index === 3
-            ? "PM + Quality/Compliance SMEs"
-            : "Sponsor + Operations Lead";
+            ? composeRoleLabelsFromGuidance(roleGuidance, ["Project Manager", "Security/Compliance Lead", "SMEs"], { joiner: " + ", allowSuggested: true })
+            : composeRoleLabelsFromGuidance(roleGuidance, ["Project Sponsor", "Operations Lead"], { joiner: " + ", allowSuggested: true });
 
     return `Phase ${milestone.phaseNumber} (${milestone.stage}) checkpoint by ${milestone.targetLabel}: ${milestone.milestone}. Owner: ${owner}. Required signoff: ${stakeholderGroups}.`;
   });
@@ -4015,6 +4118,12 @@ function buildStakeholderResponsibilityLines(intake) {
 }
 
 function buildAIInsights(intake, context, followups, timeline, workMatrix, aiMeta = { provider: "Local assistant" }) {
+  const roleGuidance = buildIntakeRoleGuidance(intake, context);
+  const dependencyReviewRoles = composeRoleLabelsFromGuidance(
+    roleGuidance,
+    ["Project Manager", "Technical Lead", "SMEs"],
+    { joiner: " + ", allowSuggested: true, fallback: "PM + Tech Lead + SMEs" }
+  );
   const requiredChecks = [
     Boolean(intake.projectTitle),
     Boolean(intake.projectGoal),
@@ -4076,7 +4185,7 @@ function buildAIInsights(intake, context, followups, timeline, workMatrix, aiMet
     "AI priority recommendations:",
     `1. Lock decision owners and acceptance criteria for ${context.scenarioType.toLowerCase()} workstreams in this cycle.`,
     `2. Triage constraints early: ${constraints}`,
-    `3. Run a focused dependency review with PM + Tech Lead + SMEs before Phase 2 gate.`,
+    `3. Run a focused dependency review with ${dependencyReviewRoles} before Phase 2 gate.`,
     `4. Require weekly risk aging review and close/open decisions with due dates.`,
     `5. Publish an adoption readiness mini-plan no later than ${timeline[3]?.targetDate || timeline[timeline.length - 1]?.targetDate || "the validation phase"}.`,
     "",
@@ -5067,57 +5176,254 @@ function addRolesFromText(roleSet, roleText) {
     .forEach((role) => roleSet.add(role));
 }
 
-function getTemplateRoles(pack) {
-  const roles = new Set();
-  const intake = pack?.intakeSnapshot || {};
-  const matrix = getMatrixData(pack || {}, getTimelineData(pack || {}));
-  const workstreams = getWorkstreamsData(pack || {});
-  const sectionB = getPackSection(pack, "sectionB");
-  const sectionD = getPackSection(pack, "sectionD");
+function splitStaffingRolesExact(staffingText) {
+  const raw = normalize(staffingText);
+  if (!raw) return [];
 
-  if (normalize(intake.ownerName)) {
-    roles.add("Project Sponsor");
-    roles.add("Business Owner");
-  }
+  const seen = new Set();
+  return raw
+    .split(/\n|;/)
+    .flatMap((line) => line.split(","))
+    .map((part) => part.trim().replace(/^[-*\u2022]\s*/, ""))
+    .map((part) => part.replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .filter((role) => {
+      const key = role.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
 
-  matrix.forEach((row) => {
-    addRolesFromText(roles, row.owner);
-    addRolesFromText(roles, row.workItem);
-    addRolesFromText(roles, row.dependencies);
+function extractCanonicalRolesFromText(roleText) {
+  const roleSet = new Set();
+  addRolesFromText(roleSet, roleText);
+  return Array.from(roleSet);
+}
+
+function formatSuggestedRoleLabel(role) {
+  return `${role} (Suggested based on intake)`;
+}
+
+function stripSuggestedRoleLabel(roleLabel) {
+  return normalize(roleLabel).replace(/\s+\(Suggested based on intake\)$/i, "").trim();
+}
+
+function buildIntakeRoleGuidance(intake = {}, context = {}) {
+  const constraints = intake?.constraints || {};
+  const providedRolesExact = splitStaffingRolesExact(constraints.staffing || "");
+  const canonicalToProvided = {};
+
+  providedRolesExact.forEach((roleLabel) => {
+    extractCanonicalRolesFromText(roleLabel).forEach((canonicalRole) => {
+      if (!canonicalToProvided[canonicalRole]) {
+        canonicalToProvided[canonicalRole] = roleLabel;
+      }
+    });
   });
 
-  workstreams.forEach((stream) => {
-    addRolesFromText(roles, stream.pendingOwner);
-    addRolesFromText(roles, stream.name);
-    addRolesFromText(roles, stream.focus);
-  });
+  const textBlob = [
+    intake?.projectTitle,
+    intake?.projectGoal,
+    intake?.problem,
+    ...(intake?.outcomes || []),
+    ...(intake?.stakeholders || []),
+    ...(intake?.systems || []),
+    ...(intake?.risks || []),
+    constraints.time,
+    constraints.budget,
+    constraints.staffing,
+    constraints.compliance,
+    constraints.tech,
+    intake?.goLiveDateJustification,
+    context?.scenarioType,
+  ]
+    .map(normalize)
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
 
-  [sectionB, sectionD, normalize(pack?.context?.scenarioType), normalize(intake.constraints?.staffing), normalize(intake.constraints?.compliance), normalize(intake.constraints?.tech)]
-    .forEach((text) => addRolesFromText(roles, text));
+  const stakeholders = Array.isArray(intake?.stakeholders) ? intake.stakeholders : [];
+  const systems = Array.isArray(intake?.systems) ? intake.systems : [];
+  const risks = Array.isArray(intake?.risks) ? intake.risks : [];
+  const hasGoLive = Boolean(normalize(intake?.goLiveDate));
+  const suggestions = [];
+  const suggestedSet = new Set();
 
-  const ordered = [
+  const hasProvidedCanonical = (role) => Boolean(canonicalToProvided[role]);
+  const hasProvidedExactLabel = (role) => providedRolesExact.some((item) => item.toLowerCase() === role.toLowerCase());
+
+  const suggestRole = (role, condition, reason) => {
+    if (!condition) return;
+    if (hasProvidedCanonical(role) || hasProvidedExactLabel(role)) return;
+    if (suggestedSet.has(role)) return;
+    suggestedSet.add(role);
+    suggestions.push({ role, reason });
+  };
+
+  const hasTechSignal = systems.length > 0 || Boolean(normalize(constraints.tech)) || /system|platform|application|technology|technical|integration|build|config|deployment|sso|iam/i.test(textBlob);
+  const hasDataSignal = systems.length > 1 || /data|integration|migration|report|reporting|analytics|dashboard|bi\b|metric/i.test(textBlob);
+  const hasComplianceSignal = Boolean(normalize(constraints.compliance)) || /security|compliance|legal|privacy|accessibility|policy|control/i.test(textBlob);
+  const hasOpsSignal = /operations?|service desk|support|maintenance|dispatch|handoff|hypercare/i.test(textBlob);
+  const hasCommsSignal = /communications?|comms|announcement|rollout|adoption|change management/i.test(textBlob);
+  const hasTrainingSignal = /training|enablement|readiness|knowledge transfer/i.test(textBlob);
+  const hasRequirementsSignal = /requirement|workflow|process|scope|acceptance|intake|triage/i.test(textBlob);
+  const hasVendorSignal = /vendor|third[- ]party|supplier|contract|procurement/i.test(textBlob);
+
+  suggestRole(
     "Project Sponsor",
+    Boolean(normalize(intake?.ownerName)),
+    "Sponsor/owner name was provided in the intake."
+  );
+  suggestRole(
     "Business Owner",
+    Boolean(normalize(intake?.ownerArea) || normalize(intake?.ownerName)),
+    "Business ownership context was entered in the intake."
+  );
+  suggestRole(
     "Project Manager",
+    stakeholders.length > 1 || systems.length > 0 || risks.length > 0 || hasGoLive || /milestone|dependency|timeline|deadline|cross-team|urgent|critical/i.test(textBlob),
+    "Multiple delivery coordination signals were entered (stakeholders, timing, systems, or risks)."
+  );
+  suggestRole(
     "Product Owner",
+    /product|backlog|feature|acceptance criteria|priorit/i.test(textBlob),
+    "Product/priority language appears in the intake."
+  );
+  suggestRole(
     "Business Analyst",
+    hasRequirementsSignal || stakeholders.length > 2 || (Array.isArray(intake?.outcomes) && intake.outcomes.length > 2),
+    "Requirements/process or multi-stakeholder scope signals suggest analysis support is needed."
+  );
+  suggestRole(
     "Technical Lead",
+    hasTechSignal,
+    "Systems/technology/build signals were entered in the intake."
+  );
+  suggestRole(
     "Delivery Team",
+    hasTechSignal || hasGoLive,
+    "Implementation/testing/go-live planning signals indicate delivery execution support."
+  );
+  suggestRole(
     "Data/Integration Lead",
+    hasDataSignal,
+    "Data, reporting, or integration signals were entered in the intake."
+  );
+  suggestRole(
     "Security/Compliance Lead",
+    hasComplianceSignal,
+    "Compliance/security/legal/accessibility constraints were entered in the intake."
+  );
+  suggestRole(
     "Communications Lead",
+    hasCommsSignal || (hasGoLive && stakeholders.length >= 3),
+    "Go-live and stakeholder/adoption signals suggest coordinated communications."
+  );
+  suggestRole(
     "Training Lead",
+    hasTrainingSignal || (hasGoLive && /adoption|readiness|rollout/i.test(textBlob)),
+    "Readiness/training/adoption signals were entered in the intake."
+  );
+  suggestRole(
     "Operations Lead",
+    hasOpsSignal,
+    "Operations/support/handoff signals were entered in the intake."
+  );
+  suggestRole(
     "Vendor",
+    hasVendorSignal,
+    "Vendor/procurement/contract dependencies were mentioned in the intake."
+  );
+  suggestRole(
     "SMEs",
-  ];
+    stakeholders.length > 0 || hasComplianceSignal || hasTechSignal,
+    "Stakeholder and/or domain constraint signals indicate SME input is needed."
+  );
 
-  const present = ordered.filter((role) => roles.has(role));
-  if (!present.includes("Project Manager")) present.splice(Math.min(2, present.length), 0, "Project Manager");
-  if (!present.includes("Project Sponsor")) present.unshift("Project Sponsor");
-  if (!present.includes("SMEs")) present.push("SMEs");
+  return {
+    providedRolesExact,
+    canonicalToProvided,
+    suggestedRoles: suggestions,
+  };
+}
 
-  return Array.from(new Set(present)).slice(0, 14);
+function findRoleLabelByCanonical(roles = [], canonicalRole = "") {
+  const target = normalize(canonicalRole);
+  if (!target) return "";
+  return roles.find((roleLabel) => {
+    const baseLabel = stripSuggestedRoleLabel(roleLabel);
+    return baseLabel === target || canonicalizeRoleLabel(baseLabel) === target;
+  }) || "";
+}
+
+function findFirstRoleLabelByCanonicalCandidates(roles = [], candidates = []) {
+  for (const candidate of candidates) {
+    const match = findRoleLabelByCanonical(roles, candidate);
+    if (match) return match;
+  }
+  return "";
+}
+
+function roleListHasCanonical(roles = [], canonicalRole = "") {
+  return Boolean(findRoleLabelByCanonical(roles, canonicalRole));
+}
+
+function hasSuggestedCanonicalRole(roleGuidance, canonicalRole) {
+  return (roleGuidance?.suggestedRoles || []).some((item) => item.role === canonicalRole);
+}
+
+function resolveRoleLabelFromGuidance(roleGuidance, canonicalRole, { allowSuggested = true, fallback = "" } = {}) {
+  const canonical = normalize(canonicalRole);
+  if (!canonical) return fallback;
+  const provided = normalize(roleGuidance?.canonicalToProvided?.[canonical]);
+  if (provided) return provided;
+  if (allowSuggested && hasSuggestedCanonicalRole(roleGuidance, canonical)) {
+    return formatSuggestedRoleLabel(canonical);
+  }
+  return fallback;
+}
+
+function composeRoleLabelsFromGuidance(roleGuidance, canonicalRoles = [], { joiner = " / ", allowSuggested = true, fallback = "" } = {}) {
+  const seen = new Set();
+  const labels = canonicalRoles
+    .map((canonicalRole) => resolveRoleLabelFromGuidance(roleGuidance, canonicalRole, { allowSuggested }))
+    .filter(Boolean)
+    .filter((label) => {
+      const key = label.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+  if (labels.length) return labels.join(joiner);
+  return fallback || normalize(roleGuidance?.providedRolesExact?.[0]) || "Owner to confirm";
+}
+
+function formatPendingOwnerFromGuidance(roleGuidance, canonicalRoles = [], { joiner = " / " } = {}) {
+  const label = composeRoleLabelsFromGuidance(roleGuidance, canonicalRoles, { joiner, allowSuggested: true, fallback: "" });
+  return `To be assigned (${label || "Owner to confirm"})`;
+}
+
+function getTemplateRoles(pack) {
+  const intake = pack?.intakeSnapshot || {};
+  const context = pack?.context || {};
+  const roleGuidance = buildIntakeRoleGuidance(intake, context);
+  const combined = [];
+  const seen = new Set();
+  const pushRole = (roleLabel) => {
+    const role = normalize(roleLabel);
+    if (!role) return;
+    const key = role.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    combined.push(role);
+  };
+
+  roleGuidance.providedRolesExact.forEach(pushRole);
+  roleGuidance.suggestedRoles.forEach((item) => pushRole(formatSuggestedRoleLabel(item.role)));
+
+  return combined.length ? combined : ["Project Manager (Suggested based on intake)"];
 }
 
 function pickTemplateOwnerForTopic(topicText, roles = []) {
@@ -5131,7 +5437,7 @@ function pickTemplateOwnerForTopic(topicText, roles = []) {
   if (/requirement|scope|acceptance/.test(topic)) preferred.push("Product Owner", "Business Analyst");
   if (/go-live|handoff|hypercare|operations/.test(topic)) preferred.push("Operations Lead", "Project Manager");
   preferred.push("Project Manager", "Project Sponsor", "SMEs");
-  return preferred.find((role) => roles.includes(role)) || roles[0] || "Project Manager";
+  return findFirstRoleLabelByCanonicalCandidates(roles, preferred) || roles[0] || "Project Manager";
 }
 
 function inferImpactPriorityFromText(text, fallbackType = "Risk") {
@@ -5460,7 +5766,7 @@ function getRaciRowDefinitions(pack) {
 }
 
 function buildRaciAssignmentMap(rowKey, roles, pack) {
-  const hasVendor = roles.includes("Vendor");
+  const hasVendor = roleListHasCanonical(roles, "Vendor");
   const defaultMap = Object.fromEntries(roles.map((role) => [role, ""]));
   const configByRow = {
     governance_cadence: {
@@ -5544,16 +5850,17 @@ function buildRaciAssignmentMap(rowKey, roles, pack) {
   };
 
   const config = configByRow[rowKey] || configByRow.schedule_milestones;
-  const pickFirstAvailable = (candidates = []) => candidates.find((role) => roles.includes(role));
+  const pickFirstAvailable = (candidates = []) => findFirstRoleLabelByCanonicalCandidates(roles, candidates);
   const setCode = (role, code) => {
-    if (!role || !roles.includes(role)) return false;
-    if (defaultMap[role]) return false;
-    defaultMap[role] = code;
+    const roleLabel = findRoleLabelByCanonical(roles, role) || role;
+    if (!roleLabel || !roles.includes(roleLabel)) return false;
+    if (defaultMap[roleLabel]) return false;
+    defaultMap[roleLabel] = code;
     return true;
   };
 
   let accountable = pickFirstAvailable(config.A);
-  if (!accountable) accountable = roles.includes("Project Manager") ? "Project Manager" : roles[0];
+  if (!accountable) accountable = findRoleLabelByCanonical(roles, "Project Manager") || roles[0];
   if (accountable) {
     defaultMap[accountable] = "A";
   }
@@ -5792,11 +6099,12 @@ function buildTeamWorkbookGroupTabs(pack) {
   const ownerArea = normalize(intake.ownerArea);
 
   const roleRows = (roleList, { prefillOwner = false } = {}) => roleList
-    .filter((role) => roles.includes(role))
+    .map((role) => findRoleLabelByCanonical(roles, role))
+    .filter(Boolean)
     .map((role) => ({
-      Name: prefillOwner && /Project Sponsor|Business Owner/.test(role) && ownerName ? ownerName : "",
+      Name: prefillOwner && /Project Sponsor|Business Owner/.test(stripSuggestedRoleLabel(role)) && ownerName ? ownerName : "",
       Email: "",
-      Role: prefillOwner && role === "Business Owner" && ownerArea ? `${role} (${ownerArea})` : role,
+      Role: prefillOwner && stripSuggestedRoleLabel(role) === "Business Owner" && ownerArea ? `${role} (${ownerArea})` : role,
     }));
 
   const steeringRows = [
@@ -5825,7 +6133,7 @@ function buildTeamWorkbookGroupTabs(pack) {
   });
 
   const stakeholderRows = stakeholderNames.map((name) => ({ Name: name, Email: "", Role: "Stakeholder / SME" }));
-  if (roles.includes("SMEs") && !stakeholderRows.some((row) => /sme/i.test(row.Role))) {
+  if (roleListHasCanonical(roles, "SMEs") && !stakeholderRows.some((row) => /sme/i.test(row.Role))) {
     stakeholderRows.push({ Name: "", Email: "", Role: "SMEs" });
   }
 
