@@ -204,6 +204,12 @@ const FEEDBACK_ENTRIES = [
     receivedAt: "2026-02-25",
     comment: "I tried the tool, and overall it’s very impressive—comprehensive, well-designed, and easy to use.\n\nA few areas could be refined: some role-based outputs felt a little off from what I entered, a few of the initial questions didn’t always feel relevant depending on the project type, and the generated output was a bit longer than needed in places.\n\nThat said, this is a very strong tool with a great UI and a lot of potential. With a few refinements and continued use, it can become an even more powerful framework builder for projects.",
   },
+  {
+    id: "feedback-2026-03-04-ba-1",
+    source: "BA",
+    receivedAt: "2026-03-04",
+    comment: "The tool was impressive to use. With just a few simple inputs, it generated a strong framework and a practical plan for how to approach project execution. I especially appreciated the ability to track outcomes to help keep everything on course, and the proposed governance structure was also a strong feature. Overall, it feels like a very useful and well-thought-out tool.",
+  },
 ];
 
 const SAMPLE_PROJECTS = [
